@@ -33,7 +33,7 @@ prevDates <- seq.Date(as.Date("1980-02-01", "%Y-%m-%d", tz = "CET"), # initial d
                      by = "year",                                   # interval
                      length.out = NULL)                             # period length
 
-# Get meteorological files
+# Get meteorological files:
 # I think with the loop is better because if you put the whole list directly in the "days" argument it seems to go over all the months in the middle
 # and download unnecessary files
 for(i in 1:length(prevDates)) {
@@ -61,69 +61,86 @@ for(i in 1:length(dateList)) {
 
 # Calculate trajectories ####
 # The "dates" argument allows you to subset the list of dates so you can run blocks of 15 days or whatever; we should be able to loop this to make multiple plots for different months and coordinates for example
-traj<-ProcTraj(lat = 41.308811, lon = 2.112405, #Llobregat's Delta
-               hour.interval = 1, name = "traj", start.hour = "12:00", end.hour = "12:00", #just one trajectory per day, at 12:00
-               met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -48, height = 500, 
-               hy.path = "C:/hysplit/", dates = dateList[month(dateList)==3 & day(dateList) %in% c(1:15)], tz = "CET")
+dayblocks <- list(c(01:15), c(16:31))
+library(raster) #needed for the lines that change the raster values, from maxValue until setValues
 
-# Plotting the calculated trajectories in a map
-traj_lines<-Df2SpLines(traj, crs = "+proj=longlat +datum=NAD27") #here I just took the crs value from the documentation example as I am not familiar with datums and all that, it may need to be changed
-traj_lines_df<-Df2SpLinesDf(traj_lines, traj, add.distance = T, add.azimuth = T) #this line is not really needed but it may be useful for other things
+library(here)
 
-# pdf(here("Winds_map.pdf"))
-# PlotTraj(traj_lines_df) #plots the trajectories in a map
-# dev.off()
-
-traj_freq<- RasterizeTraj(traj_lines, parallel = T) #generates a raster, where each cell has the number of trajectories that pass through it
-
-library(raster)
-max.val <- maxValue(traj_freq)
-v <- getValues(traj_freq)
-v <- v/max.val
-traj_freq <- setValues(traj_freq, v) # these lines change the absolute number of trajectories to relative number (i.e. from 0 to 1)
-
-#modified version of PlotTrajFreq, so that we can change the scale of the plot (I did not find a way to do it directly, it may be hardcoded?)
-plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "white", 
-          pdf = F, file.name = "output", ...) 
-{
-  if (pdf == T) {
-    pdf(file.name, paper = "USr", height = 0, width = 0)
-  }
-  oldpar <- par(no.readonly = TRUE)
-  par(mar = c(0, 0, 0, 0) + 2)
-  plot.add <- F
-  extra.args <- list(...)
-  if (!"main" %in% names(extra.args)) {
-    extra.args$main <- NULL
-  }
-  if (background == T) {
-    bb <- bbox(spGridDf)
-    PlotBgMap(spGridDf, xlim = bb[1, ], ylim = bb[2, ], 
-              axes = TRUE)
-    grid(col = "white")
-    plot.add <- T
-  }
-  grays <- colorRampPalette(c("light green", "green", "greenyellow", 
-                              "yellow", "orange", "orangered", "red"))(10)
-  image(spGridDf, col = grays, breaks = (c(0, 0.01, 0.02, 0.03, 
-                                           0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1)), add = plot.add)
-  legend("topleft", legend = c("0.00 - 0.01", "0.01 - 0.02", "0.02 - 0.03", 
-                               "0.03 - 0.04", "0.04 - 0.05", "0.05 - 0.06", "0.06 - 0.07", 
-                               "0.07 - 0.08", "0.08 - 0.09", "0.09 - 0.1"), fill = grays)
-  do.call(title, extra.args)
-  if (!missing(overlay)) {
-    plot(overlay, add = T, col = "black", border = "black")
-  }
-  par(oldpar)
-  if (pdf == T) {
-    dev.off()
+pdf(here("Winds_raster.pdf"))
+#png(here("Winds_raster.png"), height=1000, width=700, res=600)
+#par(mfcol=c(2,2))
+for (i in monthList){
+  for (j in dayblocks){
+    #Calculate the trajectory
+    traj<-ProcTraj(lat = 41.308811, lon = 2.112405, #Llobregat's Delta
+                   hour.interval = 1, name = "traj", start.hour = "12:00", end.hour = "12:00", #just one trajectory per day, at 12:00
+                   met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -48, height = 500, 
+                   hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) %in% j], tz = "CET")
+    
+    # Plot calculated trajectories in a map
+    traj_lines<-Df2SpLines(traj, crs = "+proj=longlat +datum=NAD27") #here I just took the crs value from the documentation example as I am not familiar with datums and all that, it may need to be changed
+    traj_lines_df<-Df2SpLinesDf(traj_lines, traj, add.distance = T, add.azimuth = T) #this line is not really needed but it may be useful for other things
+    
+    # pdf(here("Winds_map.pdf"))
+    # PlotTraj(traj_lines_df) #plots the trajectories in a map
+    # dev.off()
+    
+    #generates a raster, where each cell has the number of trajectories that pass through it
+    traj_freq<- RasterizeTraj(traj_lines, parallel = F) #switch to parallel=T to calculate in parallel, but with very few trajectories (less than 8 I think)
+                                                        #it won't work
+    
+    # these lines change the absolute number of trajectories to relative number (i.e. from 0 to 1)
+    max.val <- maxValue(traj_freq)        #gets the max value of the raster
+    v <- getValues(traj_freq)             #gets all values of the raster
+    v <- v/max.val                        #divides the values
+    traj_freq <- setValues(traj_freq, v)  #passes the new values to the raster
+    
+    max.val<-maxValue(traj_freq)          #get the (new) max value
+    breaks<-seq(0, max.val, max.val/10)   #this will set the scale of the plot
+    
+    #modified version of PlotTrajFreq, so that we can change the scale of the plot (I did not find a way to do it directly, it seemed to be hardcoded)
+    plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "white", 
+                         pdf = F, file.name = "output", ...) 
+    {
+      if (pdf == T) {
+        pdf(file.name, paper = "USr", height = 0, width = 0)
+      }
+      oldpar <- par(no.readonly = TRUE)
+      par(mar = c(0, 0, 0, 0) + 2)
+      plot.add <- F
+      extra.args <- list(...)
+      if (!"main" %in% names(extra.args)) {
+        extra.args$main <- NULL
+      }
+      if (background == T) {
+        bb <- bbox(spGridDf)
+        PlotBgMap(spGridDf, xlim = bb[1, ], ylim = bb[2, ], 
+                  axes = TRUE)
+        grid(col = "white")
+        plot.add <- T
+      }
+      grays <- colorRampPalette(c("light green", "green", "greenyellow", 
+                                  "yellow", "orange", "orangered", "red"))(10)
+      image(spGridDf, col = grays, breaks = breaks, add = plot.add)
+      legend("topleft", legend = c(paste0(breaks[1]," - ",breaks[2]), paste0(breaks[2]," - ",breaks[3]), paste0(breaks[3]," - ",breaks[4]),
+                                   paste0(breaks[4]," - ",breaks[5]), paste0(breaks[5]," - ",breaks[6]), paste0(breaks[6]," - ",breaks[7]),
+                                   paste0(breaks[7]," - ",breaks[8]), paste0(breaks[8]," - ",breaks[9]), paste0(breaks[9]," - ",breaks[10]),
+                                   paste0(breaks[10]," - ",breaks[11])), fill = grays)
+      do.call(title, extra.args)
+      if (!missing(overlay)) {
+        plot(overlay, add = T, col = "black", border = "black")
+      }
+      par(oldpar)
+      if (pdf == T) {
+        dev.off()
+      }
+    }
+    
+    #plot the rasterized trajectories
+    traj_grid<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
+    plotRaster(traj_grid, main = paste(month.name[i], j[1], "to", month.name[i], j[2], yearList[1], "-", yearList[length(yearList)], sep = " ")) #plots the raster
   }
 }
-
-traj_grid<-as(traj_freq, "SpatialGridDataFrame")
-library(here)
-png(here("Winds_raster.png"))
-plotRaster(traj_grid, pdf = T, file.name = "Winds_raster.pdf") #plots the raster
 dev.off()
 
 # Attempt to start working with splitR; failed due to formats not parsing? ####
