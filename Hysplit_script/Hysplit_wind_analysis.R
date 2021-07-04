@@ -121,11 +121,11 @@ for (i in monthList){
       }
       grays <- colorRampPalette(c("light green", "green", "greenyellow", 
                                   "yellow", "orange", "orangered", "red"))(10)
-      image(spGridDf, col = grays, breaks = breaks, add = plot.add)
-      legend("topleft", legend = c(paste0(breaks[1]," - ",breaks[2]), paste0(breaks[2]," - ",breaks[3]), paste0(breaks[3]," - ",breaks[4]),
-                                   paste0(breaks[4]," - ",breaks[5]), paste0(breaks[5]," - ",breaks[6]), paste0(breaks[6]," - ",breaks[7]),
-                                   paste0(breaks[7]," - ",breaks[8]), paste0(breaks[8]," - ",breaks[9]), paste0(breaks[9]," - ",breaks[10]),
-                                   paste0(breaks[10]," - ",breaks[11])), fill = grays)
+      image(spGridDf, col = grays, breaks = (c(0, 0.01, 0.02, 0.03, 
+                                               0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1)), add = plot.add)
+      legend("topleft", legend = c("0.00 - 0.01", "0.01 - 0.02", "0.02 - 0.03", 
+                                   "0.03 - 0.04", "0.04 - 0.05", "0.05 - 0.06", "0.06 - 0.07", 
+                                   "0.07 - 0.08", "0.08 - 0.09", "0.09 - 0.1"), fill = grays)
       do.call(title, extra.args)
       if (!missing(overlay)) {
         plot(overlay, add = T, col = "black", border = "black")
@@ -138,7 +138,7 @@ for (i in monthList){
     
     #plot the rasterized trajectories
     traj_grid<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
-    plotRaster(traj_grid, main = paste(month.name[i], j[1], "to", month.name[i], j[2], yearList[1], "-", yearList[length(yearList)], sep = " ")) #plots the raster
+    plotRaster(traj_grid, main = paste(month.name[i], j[1], "to", month.name[i], j[length(j)], yearList[1], "-", yearList[length(yearList)], sep = " ")) #plots the raster
   }
 }
 dev.off()
