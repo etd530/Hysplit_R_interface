@@ -8,8 +8,8 @@ library(lubridate)
 
 # Variables for the runs ####
 dayList <- c(1:31)                          # put the days of the month here, without caring about short months
-monthList <- c(01:012)                      # months go here
-yearList <- c(1980:2020)                    # years
+monthList <- c(03:05)                      # months go here
+yearList <- c(2000:2020)                    # years
 dayblocks <- list(c(01:15), c(16:31))       # Set the blocks of days you want to run together to plot in the same map
 coord <- list(c(41.308811, 2.112405),       # coordinates
               c(36.885601, -6.360097))
@@ -156,15 +156,43 @@ for (n in coord){
 
 dev.off()
 
-# Attempt to start working with splitR; failed due to formats not parsing? ####
-traj_splitR<-hysplit_trajectory(lat = 42.83752,
-                   lon = 2.30363,
-                   height = 50,
-                   duration = 12,
-                   days = as.Date("1998-02-21", "%Y-%m-%d", tz = "CET"),
-                   daily_hours = c(12),
-                   direction = "forward",
-                   met_type = "reanalysis",
-                   extended_met = F,
-                   met_dir = "C:/hysplit4/working/"
-                   )
+# Calculate "distance" from origin and "angle" relatve to origin for each trajectory position (WARNING: this is done as if it were on normal, euclidean,
+# "flat" geometry so this is NOT correct right now!!! just making the layout of the code)
+traj$dist <- sqrt(abs(traj$lat-coord[[2]][1])^2+abs(traj$lon-coord[[2]][2])^2)
+traj$angle <- atan(abs(traj$lat-coord[[2]][1])/abs(traj$lon-coord[[2]][2]))
+
+#we take out values for the starting points, as they are still at the origin so distance is zero and it makes no sense to calculate an angle
+traj$dist[traj$hour.inc==0] <- NA
+traj$angle[traj$hour.inc==0] <- NA
+
+#library(clifro)
+#organize a data frame with angle in degrees and distance from origin
+df<-data.frame(180*traj$angle/pi, traj$dist)
+colnames(df) <- c("deg", "dist")
+df <- df[!is.na(df$deg),]
+
+#rescale data into 12 "slices" of 30 degrees each
+ls<-seq(15,345, 30)
+for (i in 1:(length(ls)-1)) {
+  df$deg[df$deg>ls[i] & df$deg<ls[i+1]] <- mean(c(ls[i],ls[i+1]))
+}
+df$deg[df$deg>345 & df$deg<360] <- 0
+df$deg[df$deg>0 & df$deg<15] <- 0
+df$count <- 1
+
+#NOTE TO SELF: check the thermoregulations script and make a count of how many trajs are for each direction, then complete putting zeroes to the angles that are unused, that way you should get the full compass
+
+
+library(circular)
+library(ggplot2)
+#dir<-circular(df$deg, units = 'degrees')
+#count<-df$count #well, this is just a placeholder for now
+
+ggplot(data=df, aes(x=deg, y=count)) + geom_bar(stat='identity') +
+  coord_polar(start = 2 * pi - pi/12, clip = "off") + ggtitle("Wind directions") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+clifro::windrose(speed = df$count,
+         direction = df$deg,
+         speed_cuts = seq(0,25,5),
+         ggtheme='minimal') + ggtitle("Wind directions") + theme(plot.title = element_text(hjust = 0.5))
