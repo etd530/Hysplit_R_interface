@@ -1,12 +1,13 @@
-                        #HYSPLIT Program (prototype)
+#!/usr/bin/Rscript
+                                        #### HYSPLIT Program (prototype) ####
 
-# Load packages
+#### Load packages ####
 library(splitr)
 library(opentraj)
 library(lubridate)
 
 
-# Variables for the runs ####
+#### Variables for the runs ####
 dayList <- c(1:31)                          # put the days of the month here, without caring about short months
 monthList <- c(03:05)                      # months go here
 yearList <- c(2000:2020)                    # years
@@ -17,6 +18,50 @@ height <- 500                               # height of the winds at starting po
 duration <- -48                             # how long fowrwards or backwards should the run go
 times <- list(c("12:00", "12:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
 hourInt <- 1                                # at which intervals should you start new trajectories (every 2 hours, etc.)
+
+
+#modified version of PlotTrajFreq, so that we can change the scale of the plot and the color scale (I did not find a way to do it directly, it seemed to be hardcoded)
+plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "white", 
+                     pdf = F, file.name = "output", ...) 
+{
+  if (pdf == T) {
+    pdf(file.name, paper = "USr", height = 0, width = 0)
+  }
+  oldpar <- par(no.readonly = TRUE)
+  par(mar = c(0, 0, 0, 0) + 2)
+  plot.add <- F
+  extra.args <- list(...)
+  if (!"main" %in% names(extra.args)) {
+    extra.args$main <- NULL
+  }
+  if (background == T) {
+    bb <- bbox(spGridDf)
+    PlotBgMap(spGridDf, xlim = bb[1, ], ylim = bb[2, ], 
+              axes = TRUE)
+    grid(col = "white")
+    plot.add <- T
+  }
+  
+  grays <- colorRampPalette(c("yellow", "orange", "orangered", "red"))(10) #names are color range, number is how many colors to generate
+  
+  grays[11] <- "#FFFFFF00"
+  grays[12] <- "#000000"
+  
+  #if you change the number of colors in the previous line you must change breaks and legend accordingly
+  image(spGridDf, col = grays, breaks = (c(0, 0.01, 0.02, 0.03, 
+                                           0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.99, 1)), add = plot.add)
+  legend("topleft", legend = c("0.00 - 0.01", "0.01 - 0.02", "0.02 - 0.03", 
+                               "0.03 - 0.04", "0.04 - 0.05", "0.05 - 0.06", "0.06 - 0.07", 
+                               "0.07 - 0.08", "0.08 - 0.09", "0.09 - 0.1"), fill = grays)
+  do.call(title, extra.args)
+  if (!missing(overlay)) {
+    plot(overlay, add = T, col = "black", border = "black")
+  }
+  par(oldpar)
+  if (pdf == T) {
+    dev.off()
+  }
+}
 
 # Creating the list with the days of interest ####
 dateList <- as.vector(5) # just creating a vector
@@ -108,44 +153,6 @@ for (n in coord){
       
       max.val<-maxValue(traj_freq)          #get the (new) max value
       breaks<-seq(0, max.val, max.val/10)   #this will set the scale of the plot
-      
-      #modified version of PlotTrajFreq, so that we can change the scale of the plot (I did not find a way to do it directly, it seemed to be hardcoded)
-      plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "white", 
-                           pdf = F, file.name = "output", ...) 
-      {
-        if (pdf == T) {
-          pdf(file.name, paper = "USr", height = 0, width = 0)
-        }
-        oldpar <- par(no.readonly = TRUE)
-        par(mar = c(0, 0, 0, 0) + 2)
-        plot.add <- F
-        extra.args <- list(...)
-        if (!"main" %in% names(extra.args)) {
-          extra.args$main <- NULL
-        }
-        if (background == T) {
-          bb <- bbox(spGridDf)
-          PlotBgMap(spGridDf, xlim = bb[1, ], ylim = bb[2, ], 
-                    axes = TRUE)
-          grid(col = "white")
-          plot.add <- T
-        }
-        grays <- colorRampPalette(c("light green", "green", "greenyellow", 
-                                    "yellow", "orange", "orangered", "red"))(10)
-        image(spGridDf, col = grays, breaks = (c(0, 0.01, 0.02, 0.03, 
-                                                 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1)), add = plot.add)
-        legend("topleft", legend = c("0.00 - 0.01", "0.01 - 0.02", "0.02 - 0.03", 
-                                     "0.03 - 0.04", "0.04 - 0.05", "0.05 - 0.06", "0.06 - 0.07", 
-                                     "0.07 - 0.08", "0.08 - 0.09", "0.09 - 0.1"), fill = grays)
-        do.call(title, extra.args)
-        if (!missing(overlay)) {
-          plot(overlay, add = T, col = "black", border = "black")
-        }
-        par(oldpar)
-        if (pdf == T) {
-          dev.off()
-        }
-      }
       
       #plot the rasterized trajectories
       traj_grid<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
