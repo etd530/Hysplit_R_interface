@@ -8,15 +8,14 @@ library(lubridate)
 
 
 #### Variables for the runs ####
-dayList <- c(1:31)                          # put the days of the month here, without caring about short months
-monthList <- c(03:05)                      # months go here
-yearList <- c(2000:2020)                    # years
-dayblocks <- list(c(01:15), c(16:31))       # Set the blocks of days you want to run together to plot in the same map
-coord <- list(c(41.308811, 2.112405),       # coordinates
-              c(36.885601, -6.360097))
-height <- 500                               # height of the winds at starting point
-duration <- -48                             # how long fowrwards or backwards should the run go
-times <- list(c("12:00", "12:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
+dayList <- c(22:31)                          # put the days of the month here, without caring about short months
+monthList <- c(10)                      # months go here
+yearList <- c(2013)                    # years
+dayblocks <- list(c(22:25), c(25:28), c(28, 31))       # Set the blocks of days you want to run together to plot in the same map
+coord <- list(c(41.308811, 2.112405))       # coordinates
+height <- c(500, 1000, 2000)                               # height of the winds at starting point
+duration <- -200                             # how long fowrwards or backwards should the run go
+times <- list(c("06:00", "23:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
 hourInt <- 1                                # at which intervals should you start new trajectories (every 2 hours, etc.)
 
 
@@ -119,62 +118,74 @@ for(i in 1:length(dateList)) {
 # Calculate trajectories ####
 library(raster) #needed for the lines that change the raster values, from maxValue until setValues
 
-library(here)
+#library(here)
 
-pdf(here("Winds_raster.pdf"))
+pdf("./Winds_raster.pdf")
 #png(here("Winds_raster.png"), height=1000, width=700, res=600)
 #par(mfcol=c(2,2))
 for (n in coord){
   for (i in monthList){
     for (j in dayblocks){
-      #Calculate the trajectory
-      traj<-ProcTraj(lat = n[1], lon = n[2],
-                     hour.interval = hourInt, name = "traj", start.hour = times[[1]][1], end.hour = times[[1]][2],
-                     met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = height, 
-                     hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) %in% j], tz = "CET")
-      
-      # Plot calculated trajectories in a map
-      traj_lines<-Df2SpLines(traj, crs = "+proj=longlat +datum=NAD27") #here I just took the crs value from the documentation example as I am not familiar with datums and all that, it may need to be changed
-      traj_lines_df<-Df2SpLinesDf(traj_lines, traj, add.distance = T, add.azimuth = T) #this line is not really needed but it may be useful for other things
-      
-      # pdf(here("Winds_map.pdf"))
-      # PlotTraj(traj_lines_df) #plots the trajectories in a map
-      # dev.off()
-      
-      #generates a raster, where each cell has the number of trajectories that pass through it
-      traj_freq<- RasterizeTraj(traj_lines, parallel = F) #switch to parallel=T to calculate in parallel, but with very few trajectories (less than 8 I think)
-      #it won't work
-      
-      # these lines change the absolute number of trajectories to relative number (i.e. from 0 to 1)
-      max.val <- maxValue(traj_freq)        #gets the max value of the raster
-      v <- getValues(traj_freq)             #gets all values of the raster
-      v <- v/max.val                        #divides the values
-      traj_freq <- setValues(traj_freq, v)  #passes the new values to the raster
-      
-      max.val<-maxValue(traj_freq)          #get the (new) max value
-      breaks<-seq(0, max.val, max.val/10)   #this will set the scale of the plot
-      
-      #plot the rasterized trajectories
-      traj_grid<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
-      plotRaster(traj_grid, main = paste(month.name[i], j[1], "to", month.name[i], j[length(j)], yearList[1], "-", yearList[length(yearList)], sep = " ")) #plots the raster
+      for(h in height){
+        #Calculate the trajectory
+        traj<-ProcTraj(lat = n[1], lon = n[2],
+                       hour.interval = hourInt, name = "traj", start.hour = times[[1]][1], end.hour = times[[1]][2],
+                       met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
+                       hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) %in% j], tz = "CET")
+        
+        # Plot calculated trajectories in a map
+        traj_lines<-Df2SpLines(traj, crs = "+proj=longlat +datum=NAD27") #here I just took the crs value from the documentation example as I am not familiar with datums and all that, it may need to be changed
+        traj_lines_df<-Df2SpLinesDf(traj_lines, traj, add.distance = T, add.azimuth = T) #this line is not really needed but it may be useful for other things
+        
+        # pdf(here("Winds_map.pdf"))
+        # PlotTraj(traj_lines_df) #plots the trajectories in a map
+        # dev.off()
+        
+        #generates a raster, where each cell has the number of trajectories that pass through it
+        traj_freq<- RasterizeTraj(traj_lines, parallel = F) #switch to parallel=T to calculate in parallel, but with very few trajectories (less than 8 I think)
+        #it won't work
+        
+        # these lines change the absolute number of trajectories to relative number (i.e. from 0 to 1)
+        max.val <- maxValue(traj_freq)        #gets the max value of the raster
+        v <- getValues(traj_freq)             #gets all values of the raster
+        v <- v/max.val                        #divides the values
+        traj_freq <- setValues(traj_freq, v)  #passes the new values to the raster
+        
+        max.val<-maxValue(traj_freq)          #get the (new) max value
+        breaks<-seq(0, max.val, max.val/10)   #this will set the scale of the plot
+        
+        #plot the rasterized trajectories <- FIX THE SPACES IN THE MAIN TITLE CHANGING SEPARATOR TO NONE AND ADDING THE NECESSARY SPACES
+        traj_grid<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
+        plotRaster(traj_grid, main = paste(month.name[i], j[1], "to", month.name[i], j[length(j)], yearList[1], "-", yearList[length(yearList)], "(", h, "m AGL)", sep = " ")) #plots the raster
+      }
     }
   }
 }
 
 dev.off()
 
-# Calculate "distance" from origin and "angle" relatve to origin for each trajectory position (WARNING: this is done as if it were on normal, euclidean,
-# "flat" geometry so this is NOT correct right now!!! just making the layout of the code)
-traj$dist <- sqrt(abs(traj$lat-coord[[2]][1])^2+abs(traj$lon-coord[[2]][2])^2)
-traj$angle <- atan(abs(traj$lat-coord[[2]][1])/abs(traj$lon-coord[[2]][2]))
+# Calculate distance from origin and angle relative to origin for each trajectory position
+library(raster)
+traj$dist <- pointDistance(cbind(traj$lon, traj$lat), c(coord[[1]][2], coord[[1]][1]), lonlat = T)
+
+library(geosphere)
+traj$angle <- bearing(c(coord[[1]][2], coord[[1]][1]), cbind(traj$lon, traj$lat))
+
 
 #we take out values for the starting points, as they are still at the origin so distance is zero and it makes no sense to calculate an angle
 traj$dist[traj$hour.inc==0] <- NA
 traj$angle[traj$hour.inc==0] <- NA
 
+#add 360 to negative azimuths
+for (i in 1:length(traj$angle)) {
+  if (!is.na(traj$angle[i]) & (traj$angle[i] < 0)) {
+    traj$angle[i] <- traj$angle[i] + 360
+  }
+}
+
 #library(clifro)
 #organize a data frame with angle in degrees and distance from origin
-df<-data.frame(180*traj$angle/pi, traj$dist)
+df<-data.frame(traj$angle, traj$dist)
 colnames(df) <- c("deg", "dist")
 df <- df[!is.na(df$deg),]
 

@@ -1,0 +1,14 @@
+- Any 2013 nomes?
+
+- Per quan ho necessiteu més o menys?
+
+- Coordenades d'inici?
+
+- En segon pla el què exactament? les que no son de la finestra d'oportunitat?
+
+-Per distingir les alçades pel traçat, als plots de trajectòries o al circular de la rosa dels vents? En el primer, segurament es pugui fer,
+ però llavors no podem posar una escala de densitat de trajectòries; potser és millor posar les trajectòries de diferents alçades per separat.
+Al circular plot no crec que sigui massa problema.
+
+- Respecte les hores, ha de ser de 6am a 6am? És a dir, comença el 25 a les 6:00 i va fent a les 7, 8, etc. fins les 6:00 del dia 28?
+Podria ser de 6:00 a 23:00 per tots els dies (25,26,27,28) o ha de ser just de 6 a 6?
