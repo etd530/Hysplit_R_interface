@@ -8,14 +8,14 @@ library(lubridate)
 
 
 #### Variables for the runs ####
-dayList <- c(22:31)                          # put the days of the month here, without caring about short months
+dayList <- c(22:25)                          # put the days of the month here, without caring about short months
 monthList <- c(10)                      # months go here
 yearList <- c(2013)                    # years
-dayblocks <- list(c(22:25), c(25:28), c(28, 31))       # Set the blocks of days you want to run together to plot in the same map
-coord <- list(c(41.308811, 2.112405))       # coordinates
+dayblocks <- list(c(22:25))       # Set the blocks of days you want to run together to plot in the same map
+coord <- list(c(5.745974, -53.934047))       # coordinates
 height <- c(500, 1000, 2000)                               # height of the winds at starting point
 duration <- -200                             # how long fowrwards or backwards should the run go
-times <- list(c("06:00", "23:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
+times <- list(c("06:00", "06:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
 hourInt <- 1                                # at which intervals should you start new trajectories (every 2 hours, etc.)
 
 
@@ -116,8 +116,9 @@ for(i in 1:length(dateList)) {
 }
 
 # Calculate trajectories ####
-library(raster) #needed for the lines that change the raster values, from maxValue until setValues
-
+library(raster)       # needed for the lines that change the raster values, from maxValue until setValues, and for pointDistnace()
+library(geosphere)    # needed for bearing()
+library(viridis)      # colorblind-friendly color palettes
 #library(here)
 
 pdf("./Winds_raster.pdf")
@@ -126,12 +127,29 @@ pdf("./Winds_raster.pdf")
 for (n in coord){
   for (i in monthList){
     for (j in dayblocks){
+      if (exists("merged_trajs")){rm(merged_trajs)}
       for(h in height){
-        #Calculate the trajectory
-        traj<-ProcTraj(lat = n[1], lon = n[2],
-                       hour.interval = hourInt, name = "traj", start.hour = times[[1]][1], end.hour = times[[1]][2],
+        ###Calculate the trajectories
+        
+        # Trajectories for the first day; start at specified hour and end at 23:00
+        trajFirst <- ProcTraj(lat = n[1], lon = n[2],
+                              hour.interval = hourInt, name = "traj", start.hour = times[[1]][1], end.hour = "23:00",
+                              met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
+                              hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) == min(j)], tz = "CET")
+        
+        # Trajectories for the center days; all run from 00:00 to 23:00
+        traj <- ProcTraj(lat = n[1], lon = n[2],
+                       hour.interval = hourInt, name = "traj", start.hour = "00:00", end.hour = "23:00",
                        met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                       hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) %in% j], tz = "CET")
+                       hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) %in% j & day(dateList) != min(j) & day(dateList) != max(j)], tz = "CET")
+        
+        # Trajectories for the last day; start at 00:00 and end at specified hour
+        trajLast <- ProcTraj(lat = n[1], lon = n[2],
+                 hour.interval = hourInt, name = "traj", start.hour = "00:00", end.hour = times[[1]][2],
+                 met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
+                 hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) == max(j)], tz = "CET")
+        
+        traj <- rbind(trajFirst, traj, trajLast)
         
         # Plot calculated trajectories in a map
         traj_lines<-Df2SpLines(traj, crs = "+proj=longlat +datum=NAD27") #here I just took the crs value from the documentation example as I am not familiar with datums and all that, it may need to be changed
@@ -156,33 +174,58 @@ for (n in coord){
         
         #plot the rasterized trajectories <- FIX THE SPACES IN THE MAIN TITLE CHANGING SEPARATOR TO NONE AND ADDING THE NECESSARY SPACES
         traj_grid<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
-        plotRaster(traj_grid, main = paste(month.name[i], j[1], "to", month.name[i], j[length(j)], yearList[1], "-", yearList[length(yearList)], "(", h, "m AGL)", sep = " ")) #plots the raster
+        plotRaster(traj_grid, main = paste0(month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
+                                            month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
+                                            yearList[1], "-", yearList[length(yearList)], " (", h, "m AGL)")) #plots the raster
+        
+        #add the starting height of the trajectories as a variable
+        traj$start_height <- h
+        
+        #join all trajectories of the same days and different starting heights in a single df
+        if (exists("merged_trajs")) {
+          merged_trajs <- rbind(merged_trajs, traj)
+        } else {
+          merged_trajs <- traj
+        }
       }
+      
+      # Calculate distance from origin and angle relative to origin for each trajectory position
+      merged_trajs$dist <- pointDistance(cbind(merged_trajs$lon, merged_trajs$lat), c(coord[[1]][2], coord[[1]][1]), lonlat = T)
+      merged_trajs$angle <- bearing(c(coord[[1]][2], coord[[1]][1]), cbind(merged_trajs$lon, merged_trajs$lat))
+      
+      #we take out values for the starting points, as they are still at the origin so distance is zero and it makes no sense to calculate an angle
+      merged_trajs$dist[merged_trajs$hour.inc==0] <- NA
+      merged_trajs$angle[merged_trajs$hour.inc==0] <- NA
+      
+      #add 360 to negative azimuths
+      for (ang in 1:length(merged_trajs$angle)) {
+        if (!is.na(merged_trajs$angle[ang]) & (merged_trajs$angle[ang] < 0)) {
+          merged_trajs$angle[ang] <- merged_trajs$angle[ang] + 360
+        }
+      }
+      
+      # turn starting height into factor
+      merged_trajs$start_height <- as.factor(merged_trajs$start_height)
+      
+      # Build windrose-type plot
+      windrose = ggplot(data=merged_trajs, aes(x=angle, fill=start_height)) + geom_histogram(aes(y = stat(count/sum(count)))) +
+        coord_polar(start = 0, clip = "off") +
+        ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
+                       month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
+                       yearList[1], "-", yearList[length(yearList)], " (", h, "m AGL)")) +
+        scale_fill_viridis(discrete = T) +
+        scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
+        theme(plot.title = element_text(hjust = 0.5))
+      print(windrose)
     }
   }
 }
 
 dev.off()
 
-# Calculate distance from origin and angle relative to origin for each trajectory position
-library(raster)
-traj$dist <- pointDistance(cbind(traj$lon, traj$lat), c(coord[[1]][2], coord[[1]][1]), lonlat = T)
-
-library(geosphere)
-traj$angle <- bearing(c(coord[[1]][2], coord[[1]][1]), cbind(traj$lon, traj$lat))
 
 
-#we take out values for the starting points, as they are still at the origin so distance is zero and it makes no sense to calculate an angle
-traj$dist[traj$hour.inc==0] <- NA
-traj$angle[traj$hour.inc==0] <- NA
-
-#add 360 to negative azimuths
-for (i in 1:length(traj$angle)) {
-  if (!is.na(traj$angle[i]) & (traj$angle[i] < 0)) {
-    traj$angle[i] <- traj$angle[i] + 360
-  }
-}
-
+#####__END__######
 #library(clifro)
 #organize a data frame with angle in degrees and distance from origin
 df<-data.frame(traj$angle, traj$dist)
@@ -202,9 +245,9 @@ df$count <- 1
 
 
 library(circular)
-library(ggplot2)
 #dir<-circular(df$deg, units = 'degrees')
 #count<-df$count #well, this is just a placeholder for now
+
 
 ggplot(data=df, aes(x=deg, y=count)) + geom_bar(stat='identity') +
   coord_polar(start = 2 * pi - pi/12, clip = "off") + ggtitle("Wind directions") +
