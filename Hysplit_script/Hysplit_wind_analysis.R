@@ -2,19 +2,22 @@
                                         #### HYSPLIT Program (prototype) ####
 
 #### Load packages ####
-library(splitr)
-library(opentraj)
-library(lubridate)
-
-
+library(splitr)       # to work with Hysplit (to download files mostly)
+library(opentraj)     # to work with Hysplit (does the calculations and plotting)
+library(lubridate)    # for parsing dates
+library(ggplot2)      # plotting library
+library(raster)       # needed for the lines that change the raster values, from maxValue until setValues, and for pointDistnace()
+library(geosphere)    # needed for bearing()
+library(viridis)      # colorblind-friendly color palettes
+                                        
 #### Variables for the runs ####
-dayList <- c(22:25)                          # put the days of the month here, without caring about short months
+dayList <- c(22:31)                          # put the days of the month here, without caring about short months
 monthList <- c(10)                      # months go here
 yearList <- c(2013)                    # years
-dayblocks <- list(c(22:25))       # Set the blocks of days you want to run together to plot in the same map
+dayblocks <- list(c(22:25),c(25:28), c(28:31))       # Set the blocks of days you want to run together to plot in the same map
 coord <- list(c(5.745974, -53.934047))       # coordinates
 height <- c(500, 1000, 2000)                               # height of the winds at starting point
-duration <- -200                             # how long fowrwards or backwards should the run go
+duration <- -200                             # how long forwards or backwards should the run go
 times <- list(c("06:00", "06:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
 hourInt <- 1                                # at which intervals should you start new trajectories (every 2 hours, etc.)
 
@@ -115,12 +118,8 @@ for(i in 1:length(dateList)) {
                      path_met_files = "C:/hysplit/working")
 }
 
-# Calculate trajectories ####
-library(raster)       # needed for the lines that change the raster values, from maxValue until setValues, and for pointDistnace()
-library(geosphere)    # needed for bearing()
-library(viridis)      # colorblind-friendly color palettes
-#library(here)
 
+# Calculate trajectories ####
 pdf("./Winds_raster.pdf")
 #png(here("Winds_raster.png"), height=1000, width=700, res=600)
 #par(mfcol=c(2,2))
@@ -128,26 +127,28 @@ for (n in coord){
   for (i in monthList){
     for (j in dayblocks){
       if (exists("merged_trajs")){rm(merged_trajs)}
+      if (exists("merged_trajlines_df")) {rm(merged_trajlines_df)}
       for(h in height){
         ###Calculate the trajectories
         
         # Trajectories for the first day; start at specified hour and end at 23:00
         trajFirst <- ProcTraj(lat = n[1], lon = n[2],
                               hour.interval = hourInt, name = "traj", start.hour = times[[1]][1], end.hour = "23:00",
-                              met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                              hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) == min(j)], tz = "CET")
+                             met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
+                             hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) == min(j)], tz = "CET")
         
         # Trajectories for the center days; all run from 00:00 to 23:00
         traj <- ProcTraj(lat = n[1], lon = n[2],
-                       hour.interval = hourInt, name = "traj", start.hour = "00:00", end.hour = "23:00",
-                       met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                       hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) %in% j & day(dateList) != min(j) & day(dateList) != max(j)], tz = "CET")
+                      hour.interval = hourInt, name = "traj", start.hour = "00:00", end.hour = "23:00",
+                      met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
+                      hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) %in% j & day(dateList) != min(j) & day(dateList) != max(j)], tz = "CET")
+        
         
         # Trajectories for the last day; start at 00:00 and end at specified hour
         trajLast <- ProcTraj(lat = n[1], lon = n[2],
-                 hour.interval = hourInt, name = "traj", start.hour = "00:00", end.hour = times[[1]][2],
-                 met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                 hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) == max(j)], tz = "CET")
+                hour.interval = hourInt, name = "traj", start.hour = "00:00", end.hour = times[[1]][2],
+                met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
+                hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) == max(j)], tz = "CET")
         
         traj <- rbind(trajFirst, traj, trajLast)
         
@@ -155,12 +156,18 @@ for (n in coord){
         traj_lines<-Df2SpLines(traj, crs = "+proj=longlat +datum=NAD27") #here I just took the crs value from the documentation example as I am not familiar with datums and all that, it may need to be changed
         traj_lines_df<-Df2SpLinesDf(traj_lines, traj, add.distance = T, add.azimuth = T) #this line is not really needed but it may be useful for other things
         
-        # pdf(here("Winds_map.pdf"))
-        # PlotTraj(traj_lines_df) #plots the trajectories in a map
-        # dev.off()
+        # add starting height to the SpatialLinesDf
+        traj_lines_df$start_height <- h
+        
+        # combine all SpatialLinesDf of the same run and different heights in a single file
+        if (exists("merged_trajlines_df")) {
+          merged_trajlines_df <- rbind(merged_trajlines_df, traj_lines_df)
+        } else {
+          merged_trajlines_df <- traj_lines_df
+        }
         
         #generates a raster, where each cell has the number of trajectories that pass through it
-        traj_freq<- RasterizeTraj(traj_lines, parallel = F) #switch to parallel=T to calculate in parallel, but with very few trajectories (less than 8 I think)
+        traj_freq<- RasterizeTraj(traj_lines, parallel = T) #switch to parallel=T to calculate in parallel, but with very few trajectories (less than 8 I think)
         #it won't work
         
         # these lines change the absolute number of trajectories to relative number (i.e. from 0 to 1)
@@ -172,7 +179,7 @@ for (n in coord){
         max.val<-maxValue(traj_freq)          #get the (new) max value
         breaks<-seq(0, max.val, max.val/10)   #this will set the scale of the plot
         
-        #plot the rasterized trajectories <- FIX THE SPACES IN THE MAIN TITLE CHANGING SEPARATOR TO NONE AND ADDING THE NECESSARY SPACES
+        #plot the rasterized trajectories
         traj_grid<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
         plotRaster(traj_grid, main = paste0(month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                                             month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
@@ -188,6 +195,26 @@ for (n in coord){
           merged_trajs <- traj
         }
       }
+      
+      #Plot the trajectories in a map
+      setAlpha = ifelse(merged_trajlines_df$day == 28 & merged_trajlines_df$hour == 6, 1, 0.25)
+      PlotTraj(merged_trajlines_df,
+               col = ifelse(merged_trajlines_df$start_height == 500, 
+                                                viridis(n=1, alpha = setAlpha, begin = 0), 
+                                                ifelse(merged_trajlines_df$start_height == 1000,
+                                                viridis(n=1, alpha = setAlpha, begin = 0.5),
+                                                viridis(n=1, alpha = setAlpha, begin=1)))
+              )
+      
+      title(main = paste0(month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
+                          month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
+                          yearList[1], "-", yearList[length(yearList)]),
+            outer = F
+      )
+      
+      legend(0, 1, legend = c("500m", "1000m", "2000m"), bg = "transparent",
+             fill = c(viridis(n=1, begin = 0), viridis(n=1, begin = 0.5), 
+                     viridis(n=1, begin = 1)), title = "Starting altitude (m AGL)")
       
       # Calculate distance from origin and angle relative to origin for each trajectory position
       merged_trajs$dist <- pointDistance(cbind(merged_trajs$lon, merged_trajs$lat), c(coord[[1]][2], coord[[1]][1]), lonlat = T)
@@ -205,15 +232,43 @@ for (n in coord){
       }
       
       # turn starting height into factor
-      merged_trajs$start_height <- as.factor(merged_trajs$start_height)
+      merged_trajs$start_height <- factor(merged_trajs$start_height, levels = c("2000", "1000", "500"))
       
-      # Build windrose-type plot
-      windrose = ggplot(data=merged_trajs, aes(x=angle, fill=start_height)) + geom_histogram(aes(y = stat(count/sum(count)))) +
+      # Build windrose plot (all time points)
+      windrose = ggplot(data=merged_trajs, aes(x=angle, y=stat(count/sum(count)), group=start_height,
+                                                                               fill=start_height)) + 
+        geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
         coord_polar(start = 0, clip = "off") +
         ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                        month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                       yearList[1], "-", yearList[length(yearList)], " (", h, "m AGL)")) +
-        scale_fill_viridis(discrete = T) +
+                       yearList[1], "-", yearList[length(yearList)], "(all time points)")) +
+        scale_fill_viridis(discrete = T, alpha = 1) +
+        scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
+        theme(plot.title = element_text(hjust = 0.5))
+      print(windrose)
+      
+      # Build windrose plot for -200h
+      windrose = ggplot(data=merged_trajs[merged_trajs$hour.inc == -200,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
+                                               fill=start_height)) + 
+        geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
+        coord_polar(start = 0, clip = "off") +
+        ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
+                       month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
+                       yearList[1], "-", yearList[length(yearList)], "(backwards 200h)")) +
+        scale_fill_viridis(discrete = T, alpha = 1) +
+        scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
+        theme(plot.title = element_text(hjust = 0.5))
+      print(windrose)
+      
+      # Build windrose plot for -100h
+      windrose = ggplot(data=merged_trajs[merged_trajs$hour.inc == -100,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
+                                                                               fill=start_height)) + 
+        geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
+        coord_polar(start = 0, clip = "off") +
+        ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
+                       month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
+                       yearList[1], "-", yearList[length(yearList)], "(backwards 100h)")) +
+        scale_fill_viridis(discrete = T, alpha = 1) +
         scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
         theme(plot.title = element_text(hjust = 0.5))
       print(windrose)
@@ -226,34 +281,9 @@ dev.off()
 
 
 #####__END__######
-#library(clifro)
-#organize a data frame with angle in degrees and distance from origin
-df<-data.frame(traj$angle, traj$dist)
-colnames(df) <- c("deg", "dist")
-df <- df[!is.na(df$deg),]
-
-#rescale data into 12 "slices" of 30 degrees each
-ls<-seq(15,345, 30)
-for (i in 1:(length(ls)-1)) {
-  df$deg[df$deg>ls[i] & df$deg<ls[i+1]] <- mean(c(ls[i],ls[i+1]))
-}
-df$deg[df$deg>345 & df$deg<360] <- 0
-df$deg[df$deg>0 & df$deg<15] <- 0
-df$count <- 1
-
-#NOTE TO SELF: check the thermoregulations script and make a count of how many trajs are for each direction, then complete putting zeroes to the angles that are unused, that way you should get the full compass
-
-
-library(circular)
-#dir<-circular(df$deg, units = 'degrees')
-#count<-df$count #well, this is just a placeholder for now
-
-
-ggplot(data=df, aes(x=deg, y=count)) + geom_bar(stat='identity') +
-  coord_polar(start = 2 * pi - pi/12, clip = "off") + ggtitle("Wind directions") +
-  theme(plot.title = element_text(hjust = 0.5))
-
-clifro::windrose(speed = df$count,
-         direction = df$deg,
-         speed_cuts = seq(0,25,5),
-         ggtheme='minimal') + ggtitle("Wind directions") + theme(plot.title = element_text(hjust = 0.5))
+n <- c(5.745974, -53.934047)
+h <- 500
+traj27 <- ProcTraj(lat = n[1], lon = n[2],
+                 hour.interval = hourInt, name = "traj", start.hour = "00:00", end.hour = "23:00",
+                 met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
+                 hy.path = "C:/hysplit/", dates = c("2013-10-27"), tz = "CET")
