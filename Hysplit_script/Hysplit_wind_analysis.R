@@ -15,7 +15,7 @@ library(plyr)
 dayList <- c(22:31)                          # put the days of the month here, without caring about short months
 monthList <- c(10)                      # months go here
 yearList <- c(2013)                    # years
-dayblocks <- list(c(22:25),c(25:28),c(28:31))       # Set the blocks of days you want to run together to plot in the same map
+dayblocks <- list(c(22,25), c(25:28), c(28:31))       # Set the blocks of days you want to run together to plot in the same map
 coord <- list(c(5.745974, -53.934047))       # coordinates
 height <- c(500, 1000, 2000)                               # height of the winds at starting point
 duration <- -200                             # how long forwards or backwards should the run go
@@ -255,13 +255,13 @@ for (n in coord){
       if (exists("merged_trajlines_df")) {rm(merged_trajlines_df)}
       for(h in height){
         if (exists("traj")){rm(traj)}
-        for (day in 1:length(dateList)) {
+        for (dayNum in 1:length(j)) {
           
           # Set starting and ending hours depending on if its the first, last or a middle day
-          if (day == 1) {
+          if (dayNum == 1) {
             startHour = times[[1]][1]
             endHour = "23:00"
-          } else if (day == length(dateList)){
+          } else if (dayNum == length(dateList)){
             startHour = "00:00"
             endHour = times[[1]][2]
           } else {
@@ -272,7 +272,7 @@ for (n in coord){
           CurrentTraj <- ProcTrajMod(lat = n[1], lon = n[2],
                                   hour.interval = hourInt, name = "traj", start.hour = startHour, end.hour = endHour,
                                   met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                                  hy.path = "C:/hysplit/", dates = dateList[day], tz = "CET")
+                                  hy.path = "C:/hysplit/", dates = dateList[day(dateList) %in% j][dayNum], tz = "CET")
           
           #Bind trajecotires for previous days to current one
           if (exists("traj")) {
@@ -311,9 +311,10 @@ for (n in coord){
         
         #plot the rasterized trajectories
         traj_grid<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
+        yearString <- if (length(yearList)==1) {yearList[1]} else {paste0(yearList[1],"-",yearList[length(yearList)])}
         plotRaster(traj_grid, main = paste0(month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                                             month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                                            yearList[1], "-", yearList[length(yearList)], " (", h, "m AGL)")) #plots the raster
+                                            yearString, " (", h, "m AGL)")) #plots the raster
         
         #add the starting height of the trajectories as a variable
         traj$start_height <- h
@@ -332,21 +333,21 @@ for (n in coord){
       setAlpha = ifelse(merged_trajlines_df$day == 28 & merged_trajlines_df$hour == 6, 1, 0.25)
       PlotTraj(merged_trajlines_df,
                col = ifelse(merged_trajlines_df$start_height == 500, 
-                                                viridis(n=1, alpha = setAlpha, begin = 0), 
+                                                viridis(n=1, alpha = setAlpha, begin = 1), 
                                                 ifelse(merged_trajlines_df$start_height == 1000,
                                                 viridis(n=1, alpha = setAlpha, begin = 0.5),
-                                                viridis(n=1, alpha = setAlpha, begin=1)))
+                                                viridis(n=1, alpha = setAlpha, begin=0)))
               )
       
       title(main = paste0(month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                           month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                          yearList[1], "-", yearList[length(yearList)]),
+                          yearString),
             outer = T, line = -1.6
       )
       
       legend(0, 1, legend = c("500m", "1000m", "2000m"), bg = "transparent",
-             fill = c(viridis(n=1, begin = 0), viridis(n=1, begin = 0.5), 
-                     viridis(n=1, begin = 1)), title = "Starting altitude (m AGL)")
+             fill = c(viridis(n=1, begin = 1), viridis(n=1, begin = 0.5), 
+                     viridis(n=1, begin = 0)), title = "Starting altitude (m AGL)")
       
       # Calculate distance from origin and angle relative to origin for each trajectory position
       merged_trajs$dist <- pointDistance(cbind(merged_trajs$lon, merged_trajs$lat), c(coord[[1]][2], coord[[1]][1]), lonlat = T)
@@ -373,20 +374,21 @@ for (n in coord){
         coord_polar(start = 0, clip = "off") +
         ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                        month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                       yearList[1], "-", yearList[length(yearList)], "(all time points)")) +
+                       yearString, " (all time points)")) +
         scale_fill_viridis(discrete = T, alpha = 1) +
         scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
         theme(plot.title = element_text(hjust = 0.5))
       print(windrose)
       
       # Build windrose plot for -200h
+      
       windrose = ggplot(data=merged_trajs[merged_trajs$hour.inc == -200,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
                                                fill=start_height)) + 
         geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
         coord_polar(start = 0, clip = "off") +
         ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                        month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                       yearList[1], "-", yearList[length(yearList)], "(backwards 200h)")) +
+                       yearString, " (backwards 200h)")) +
         scale_fill_viridis(discrete = T, alpha = 1) +
         scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
         theme(plot.title = element_text(hjust = 0.5))
@@ -399,7 +401,7 @@ for (n in coord){
         coord_polar(start = 0, clip = "off") +
         ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                        month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                       yearList[1], "-", yearList[length(yearList)], "(backwards 100h)")) +
+                       yearString, " (backwards 100h)")) +
         scale_fill_viridis(discrete = T, alpha = 1) +
         scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
         theme(plot.title = element_text(hjust = 0.5))
