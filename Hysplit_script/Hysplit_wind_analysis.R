@@ -9,19 +9,20 @@ library(ggplot2)      # plotting library
 library(raster)       # needed for the lines that change the raster values, from maxValue until setValues, and for pointDistnace()
 library(geosphere)    # needed for bearing()
 library(viridis)      # colorblind-friendly color palettes
+library(plyr)
                                         
 #### Variables for the runs ####
 dayList <- c(22:31)                          # put the days of the month here, without caring about short months
 monthList <- c(10)                      # months go here
 yearList <- c(2013)                    # years
-dayblocks <- list(c(22:25),c(25:28), c(28:31))       # Set the blocks of days you want to run together to plot in the same map
+dayblocks <- list(c(22:25),c(25:28),c(28:31))       # Set the blocks of days you want to run together to plot in the same map
 coord <- list(c(5.745974, -53.934047))       # coordinates
 height <- c(500, 1000, 2000)                               # height of the winds at starting point
 duration <- -200                             # how long forwards or backwards should the run go
 times <- list(c("06:00", "06:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
 hourInt <- 1                                # at which intervals should you start new trajectories (every 2 hours, etc.)
 
-
+##### FUNCTIONS #####
 #modified version of PlotTrajFreq, so that we can change the scale of the plot and the color scale (I did not find a way to do it directly, it seemed to be hardcoded)
 plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "white", 
                      pdf = F, file.name = "output", ...) 
@@ -64,6 +65,130 @@ plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "wh
     dev.off()
   }
 }
+
+# modified version of ProcTraj from opentraj
+ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "london", 
+          start.hour = "00:00", end.hour = "23:00", met, out, hours = 12, 
+          height = 100, hy.path, ID = 1, dates, script.name = "test", 
+          add.new.column = F, new.column.name, new.column.value, tz = "GMT", 
+          clean.files = TRUE) 
+{
+  wd <- getwd()
+  script.extension <- ".sh"
+  OS <- "unix"
+  if (.Platform$OS.type == "windows") {
+    script.extension <- ".bat"
+    OS <- "windows"
+  }
+  hy.split.wd <- file.path(hy.path, "working")
+  hy.split.wd <- normalizePath(hy.split.wd)
+  setwd(hy.split.wd)
+  folder.name = paste("process_", ID, sep = "")
+  process.working.dir <- file.path(hy.split.wd, folder.name)
+  dir.create(process.working.dir, showWarnings = FALSE)
+  process.working.dir <- normalizePath(process.working.dir)
+  setwd(process.working.dir)
+  hy.split.exec.dir <- file.path(hy.path, "exec", "hyts_std")
+  bdyfiles.path <- file.path(hy.path, "bdyfiles")
+  symb.link.files <- list.files(path = bdyfiles.path)
+  for (i in 1:length(symb.link.files)) {
+    from <- normalizePath(file.path(bdyfiles.path, symb.link.files[[i]]))
+    to <- file.path(process.working.dir, symb.link.files[[i]])
+    file.copy(from, to)
+  }
+  control.file.number <- 1
+  script.name <- paste(script.name, "_", ID, script.extension, 
+                       sep = "")
+  dates.and.times <- laply(.data = dates, .fun = function(d) {
+    start.day <- paste(d, start.hour, sep = " ")
+    end.day <- paste(d, end.hour, sep = " ")
+    posix.date <- seq(as.POSIXct(start.day, tz), as.POSIXct(end.day, 
+                                                            tz), by = paste(hour.interval, "hour", sep = " "))
+    as.character(posix.date)
+  })
+  dates.and.times <- unique(dates.and.times)
+  hour.interval <- paste(hour.interval, "hour", sep = " ")
+  for (i in 1:length(dates.and.times)) {
+    control.file <- "CONTROL"
+    date <- as.POSIXct(dates.and.times[i], tz = tz)
+    control.file.extension <- paste(as.character(ID), "_", 
+                                    control.file.number, sep = "")
+    control.file <- paste(control.file, control.file.extension, 
+                          sep = ".")
+    year <- format(date, "%y")
+    Year <- format(date, "%Y")
+    month <- format(date, "%m")
+    day <- format(date, "%d")
+    hour <- format(date, "%H")
+    script.file <- file(script.name, "w")
+    if (OS == "unix") {
+      cat("#!/bin/bash", file = script.file, sep = "\n")
+    }
+    line <- paste("echo", year, month, day, hour, ">", control.file, 
+                  sep = " ")
+    cat(line, file = script.file, sep = "\n")
+    line <- paste("echo 1 >>", control.file, sep = " ")
+    cat(line, file = script.file, sep = "\n")
+    line <- paste("echo", lat, lon, height, ">>", control.file, 
+                  sep = " ")
+    cat(line, file = script.file, sep = "\n")
+    line <- paste("echo", hours, ">>", control.file, sep = " ")
+    cat(line, file = script.file, sep = "\n")
+    line <- paste("echo 0 >> ", control.file, "\n", "echo 10000.0 >> ", 
+                  control.file, "\n", "echo 3 >> ", control.file, 
+                  "\n", sep = "")
+    cat(line, file = script.file, sep = "")
+    months <- as.numeric(unique(format(date, "%m")))
+    months <- c(months, months + 1:2)
+    months <- months - 1
+    months <- months[months <= 12]
+    if (length(months) == 2) {
+      months <- c(min(months) - 1, months)
+    }
+    for (i in 1:3) {
+      AddMetFiles(months[i], Year, met, script.file, control.file)
+    }
+    line <- paste("echo ./ >>", control.file, sep = " ")
+    cat(line, file = script.file, sep = "\n")
+    line <- paste("echo tdump", "_", ID, "_", year, month, 
+                  day, hour, " >> ", control.file, sep = "")
+    cat(line, file = script.file, sep = "\n")
+    line <- paste(hy.split.exec.dir, control.file.extension, 
+                  sep = " ")
+    cat(line, file = script.file, sep = "\n")
+    close(script.file)
+    if (OS == "unix") {
+      system(paste0("sh ", script.name))
+    }
+    else {
+      system(paste0(script.name))
+    }
+    control.file.number <- control.file.number + 1
+  }
+  traj <- ReadFiles(process.working.dir, ID, dates.and.times, 
+                    tz)
+  if (add.new.column == T) {
+    if (!missing(new.column.name) & !missing(new.column.value)) {
+      traj[new.column.name] <- new.column.value
+    }
+    else {
+      stop("Parameters 'new.column.name' and 'new.column.value' are not defined.")
+    }
+  }
+  if (!missing(out)) {
+    file.name <- paste(out, name, Year, ".RData", sep = "")
+    save(traj, file = file.name)
+  }
+  setwd(hy.split.wd)
+  if (clean.files == T) {
+    unlink(folder.name, recursive = TRUE)
+  }
+  setwd(wd)
+  traj
+}
+
+
+##### END FUNCTIONS #####
 
 # Creating the list with the days of interest ####
 dateList <- as.vector(5) # just creating a vector
@@ -129,30 +254,35 @@ for (n in coord){
       if (exists("merged_trajs")){rm(merged_trajs)}
       if (exists("merged_trajlines_df")) {rm(merged_trajlines_df)}
       for(h in height){
-        ###Calculate the trajectories
+        if (exists("traj")){rm(traj)}
+        for (day in 1:length(dateList)) {
+          
+          # Set starting and ending hours depending on if its the first, last or a middle day
+          if (day == 1) {
+            startHour = times[[1]][1]
+            endHour = "23:00"
+          } else if (day == length(dateList)){
+            startHour = "00:00"
+            endHour = times[[1]][2]
+          } else {
+            startHour = "00:00"
+            endHour = "23:00"
+          }
+          ###Calculate the trajectories
+          CurrentTraj <- ProcTrajMod(lat = n[1], lon = n[2],
+                                  hour.interval = hourInt, name = "traj", start.hour = startHour, end.hour = endHour,
+                                  met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
+                                  hy.path = "C:/hysplit/", dates = dateList[day], tz = "CET")
+          
+          #Bind trajecotires for previous days to current one
+          if (exists("traj")) {
+            traj <- rbind(traj, CurrentTraj)
+          } else {
+            traj <- CurrentTraj
+          }
+        }
         
-        # Trajectories for the first day; start at specified hour and end at 23:00
-        trajFirst <- ProcTraj(lat = n[1], lon = n[2],
-                              hour.interval = hourInt, name = "traj", start.hour = times[[1]][1], end.hour = "23:00",
-                             met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                             hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) == min(j)], tz = "CET")
-        
-        # Trajectories for the center days; all run from 00:00 to 23:00
-        traj <- ProcTraj(lat = n[1], lon = n[2],
-                      hour.interval = hourInt, name = "traj", start.hour = "00:00", end.hour = "23:00",
-                      met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                      hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) %in% j & day(dateList) != min(j) & day(dateList) != max(j)], tz = "CET")
-        
-        
-        # Trajectories for the last day; start at 00:00 and end at specified hour
-        trajLast <- ProcTraj(lat = n[1], lon = n[2],
-                hour.interval = hourInt, name = "traj", start.hour = "00:00", end.hour = times[[1]][2],
-                met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                hy.path = "C:/hysplit/", dates = dateList[month(dateList)==i & day(dateList) == max(j)], tz = "CET")
-        
-        traj <- rbind(trajFirst, traj, trajLast)
-        
-        # Plot calculated trajectories in a map
+        # get the SpatialLinesDf
         traj_lines<-Df2SpLines(traj, crs = "+proj=longlat +datum=NAD27") #here I just took the crs value from the documentation example as I am not familiar with datums and all that, it may need to be changed
         traj_lines_df<-Df2SpLinesDf(traj_lines, traj, add.distance = T, add.azimuth = T) #this line is not really needed but it may be useful for other things
         
@@ -196,6 +326,8 @@ for (n in coord){
         }
       }
       
+      rm(traj)
+      
       #Plot the trajectories in a map
       setAlpha = ifelse(merged_trajlines_df$day == 28 & merged_trajlines_df$hour == 6, 1, 0.25)
       PlotTraj(merged_trajlines_df,
@@ -209,7 +341,7 @@ for (n in coord){
       title(main = paste0(month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                           month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
                           yearList[1], "-", yearList[length(yearList)]),
-            outer = F
+            outer = T, line = -1.6
       )
       
       legend(0, 1, legend = c("500m", "1000m", "2000m"), bg = "transparent",
@@ -283,7 +415,7 @@ dev.off()
 #####__END__######
 n <- c(5.745974, -53.934047)
 h <- 500
-traj27 <- ProcTraj(lat = n[1], lon = n[2],
-                 hour.interval = hourInt, name = "traj", start.hour = "00:00", end.hour = "23:00",
-                 met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
+traj26 <- ProcTrajMod(lat = 5.75, lon = -53.93,
+                 hour.interval = 1, name = "traj", start.hour = "00:00", end.hour = "23:00",
+                 met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -200, height = 500, 
                  hy.path = "C:/hysplit/", dates = c("2013-10-27"), tz = "CET")
