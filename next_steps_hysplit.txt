@@ -1,0 +1,5 @@
+- Identificar millor la finestra temporal -> fer el mateix pel del 27 al 28 i del 26 al 28 (sempre de 6 a 6)
+
+- Provar posar la trajectoria principal de les 3 alçades com a la figura del Hysplit (punts de cada hora; perfil)
+
+- Treure els circulars per les tres alçades independentment
