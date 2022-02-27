@@ -245,7 +245,7 @@ for(i in 1:length(dateList)) {
 
 
 # Calculate trajectories ####
-pdf("./Guiana_winds_25-28.pdf")
+pdf("./Guiana_winds_26-28_27-28.pdf")
 #png(here("Winds_raster.png"), height=1000, width=700, res=600)
 #par(mfcol=c(2,2))
 for (n in coord){
@@ -261,7 +261,7 @@ for (n in coord){
           if (dayNum == 1) {
             startHour = times[[1]][1]
             endHour = "23:00"
-          } else if (dayNum == length(dateList)){
+          } else if (dayNum == length(j)){
             startHour = "00:00"
             endHour = times[[1]][2]
           } else {
