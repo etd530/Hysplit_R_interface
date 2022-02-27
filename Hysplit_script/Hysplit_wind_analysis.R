@@ -15,12 +15,13 @@ library(plyr)
 dayList <- c(22:31)                          # put the days of the month here, without caring about short months
 monthList <- c(10)                      # months go here
 yearList <- c(2013)                    # years
-dayblocks <- list(c(22,25), c(25:28), c(28:31))       # Set the blocks of days you want to run together to plot in the same map
+dayblocks <- list(c(22:25), c(25:28), c(28:31))       # Set the blocks of days you want to run together to plot in the same map
 coord <- list(c(5.745974, -53.934047))       # coordinates
 height <- c(500, 1000, 2000)                               # height of the winds at starting point
 duration <- -200                             # how long forwards or backwards should the run go
 times <- list(c("06:00", "06:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
 hourInt <- 1                                # at which intervals should you start new trajectories (every 2 hours, etc.)
+TZ <- "Brazil/East"
 
 ##### FUNCTIONS #####
 #modified version of PlotTrajFreq, so that we can change the scale of the plot and the color scale (I did not find a way to do it directly, it seemed to be hardcoded)
@@ -207,10 +208,10 @@ dateList <- na.omit(dateList) # remove NAs (i.e. remove impossible dates such as
 # so we download the files for the months previous and next to the ones of interest
 
 # Generate list with the dates of the previous month
-prevDates <- seq.Date(if (monthList[1]==01) as.Date(paste(yearList[1]-1, "12", "01", sep="-"), "%Y-%m-%d", tz = "UTC-3")
-                      else as.Date(paste(yearList[1], monthList[1]-1, "01", sep="-"), "%Y-%m-%d", tz = "UTC-3"), # initial date
-                      if (monthList[1]==01) as.Date(paste(yearList[length(yearList)]-1, "12", "01", sep="-"), "%Y-%m-%d", tz = "UTC-3")
-                      else as.Date(paste(yearList[length(yearList)], monthList[1]-1, "01", sep="-"), "%Y-%m-%d", tz = "UTC-3"), # final date
+prevDates <- seq.Date(if (monthList[1]==01) as.Date(paste(yearList[1]-1, "12", "01", sep="-"), "%Y-%m-%d", tz = TZ)
+                      else as.Date(paste(yearList[1], monthList[1]-1, "01", sep="-"), "%Y-%m-%d", tz = TZ), # initial date
+                      if (monthList[1]==01) as.Date(paste(yearList[length(yearList)]-1, "12", "01", sep="-"), "%Y-%m-%d", tz = TZ)
+                      else as.Date(paste(yearList[length(yearList)], monthList[1]-1, "01", sep="-"), "%Y-%m-%d", tz = TZ), # final date
                      by = "year",                                   # interval
                      length.out = NULL)                             # period length
 
@@ -223,10 +224,10 @@ for(i in 1:length(prevDates)) {
 }
 
 # Generate list with dates of next month
-postDates <- seq.Date(if (monthList[length(monthList)]==12) as.Date(paste(yearList[1]+1, "01", "01", sep = "-"), "%Y-%m-%d", tz = "UTC-3")
-                     else as.Date(paste(yearList[1], monthList[length(monthList)]+1, "01", sep = "-"), "%Y-%m-%d", tz = "UTC-3"), # initial date
-                     if (monthList[length(monthList)]==12) as.Date(paste(yearList[length(yearList)]+1, "01","01", sep = "-"), "%Y-%m-%d", tz = "UTC-3")
-                     else as.Date(paste(yearList[length(yearList)], monthList[length(monthList)]+1,"01", sep = "-"), "%Y-%m-%d", tz = "UTC-3"), # final date
+postDates <- seq.Date(if (monthList[length(monthList)]==12) as.Date(paste(yearList[1]+1, "01", "01", sep = "-"), "%Y-%m-%d", tz = TZ)
+                     else as.Date(paste(yearList[1], monthList[length(monthList)]+1, "01", sep = "-"), "%Y-%m-%d", tz = TZ), # initial date
+                     if (monthList[length(monthList)]==12) as.Date(paste(yearList[length(yearList)]+1, "01","01", sep = "-"), "%Y-%m-%d", tz = TZ)
+                     else as.Date(paste(yearList[length(yearList)], monthList[length(monthList)]+1,"01", sep = "-"), "%Y-%m-%d", tz = TZ), # final date
                      by = "year",                                   # interval
                      length.out = NULL)                             # period length
 
@@ -244,7 +245,7 @@ for(i in 1:length(dateList)) {
 
 
 # Calculate trajectories ####
-pdf("./Winds_raster.pdf")
+pdf("./Guiana_winds_25-28.pdf")
 #png(here("Winds_raster.png"), height=1000, width=700, res=600)
 #par(mfcol=c(2,2))
 for (n in coord){
@@ -271,7 +272,7 @@ for (n in coord){
           CurrentTraj <- ProcTrajMod(lat = n[1], lon = n[2],
                                   hour.interval = hourInt, name = "traj", start.hour = startHour, end.hour = endHour,
                                   met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                                  hy.path = "C:/hysplit/", dates = dateList[day(dateList) %in% j][dayNum], tz = "UTC-3")
+                                  hy.path = "C:/hysplit/", dates = dateList[day(dateList) %in% j][dayNum], tz = TZ)
           
           #Bind trajecotires for previous days to current one
           if (exists("traj")) {
@@ -368,36 +369,37 @@ for (n in coord){
       
       # Build windrose plots with heights separated
       for (h in height) {
+        color = ifelse(h == 500, viridis(n=1, begin = 1), ifelse(h==1000, viridis(n=1, begin = 0.5), viridis(n=1, begin = 0)))
         # Build windrose plot (all time points)
-        windrose = ggplot(data=merged_trajs[start_height == h,], aes(x=angle, y=stat(count/sum(count)))) + 
-          geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
+        windrose = ggplot(data=merged_trajs[merged_trajs$start_height == h,], aes(x=angle, y=stat(count/sum(count)))) + 
+          geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill =  gsub("FF", "", color)) +
           coord_polar(start = 0, clip = "off") +
           ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                          month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                         yearString, " (all time points, ", h, "m AGL)")) +
+                         yearString, "\n(all time points, ", h, "m AGL)")) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
         print(windrose)
         
         # Build windrose plot for -200h
         
-        windrose = ggplot(data=merged_trajs[start_height == h & merged_trajs$hour.inc == -200,], aes(x=angle, y=stat(count/sum(count)))) + 
-          geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
+        windrose = ggplot(data=merged_trajs[merged_trajs$start_height == h & merged_trajs$hour.inc == -200,], aes(x=angle, y=stat(count/sum(count)))) + 
+          geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill =  gsub("FF", "", color)) +
           coord_polar(start = 0, clip = "off") +
           ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                          month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                         yearString, " (backwards 200h, ",h, "m AGL)")) +
+                         yearString, "\n(backwards 200h, ",h, "m AGL)")) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
         print(windrose)
         
         # Build windrose plot for -100h
-        windrose = ggplot(data=merged_trajs[start_height == h & merged_trajs$hour.inc == -100,], aes(x=angle, y=stat(count/sum(count)))) + 
-          geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
+        windrose = ggplot(data=merged_trajs[merged_trajs$start_height == h & merged_trajs$hour.inc == -100,], aes(x=angle, y=stat(count/sum(count)))) + 
+          geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill =  gsub("FF", "", color)) +
           coord_polar(start = 0, clip = "off") +
           ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                          month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                         yearString, " (backwards 100h, ", h, "m AGL)")) +
+                         yearString, "\n(backwards 100h, ", h, "m AGL)")) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
         print(windrose)
@@ -456,17 +458,23 @@ dev.off()
 traj500 <- ProcTrajMod(lat = 5.75, lon = -53.93,
                       hour.interval = 1, name = "traj", start.hour = "06:00", end.hour = "06:00",
                       met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -200, height = 500,
-                      hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = "Brazil/East")
+                      hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = TZ)
+
+traj500$start_height <- 500
 
 traj1000 <- ProcTrajMod(lat = 5.75, lon = -53.93,
                        hour.interval = 1, name = "traj", start.hour = "06:00", end.hour = "06:00",
                        met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -200, height = 1000,
-                       hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = "Brazil/East")
+                       hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = TZ)
+
+traj1000$start_height <- 1000
 
 traj2000 <- ProcTrajMod(lat = 5.75, lon = -53.93,
                         hour.interval = 1, name = "traj", start.hour = "06:00", end.hour = "06:00",
                         met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -200, height = 2000,
-                        hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = "Brazil/East")
+                        hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = TZ)
+
+traj2000$start_height <- 2000
 
 # Merge the trajectories
 MainTrajs <- rbind(traj500, traj1000, traj2000)
@@ -483,6 +491,8 @@ transformedPoints <- SpatialPoints(pts, proj4string = CRS("+proj=longlat +datum=
 transformedPoints_df <- SpatialPointsDataFrame(transformedPoints, as.data.frame(pts))
 
 # Plot trajectories and points
+pdf("Guiana_main_traj_plots.pdf")
+bb <- bbox(MainTrajlines_df)
 PlotBgMap(transformedPoints, xlim = bb[1, ], ylim = bb[2, ], axes = TRUE)
 plot(MainTrajlines_df,
          col = ifelse(MainTrajlines_df$height == 500, 
@@ -495,7 +505,7 @@ plot(MainTrajlines_df,
 
 thinnedPoints <- transformedPoints_df@coords[seq(10, nrow(transformedPoints_df@coords), 10), 1:2]
 points(thinnedPoints, 
-       pch=2, col = rep(c(viridis(n=1, begin = 1), viridis(n=1, begin = 0.5), viridis(n=1, begin = 0)), times=c(20,20,20)))
+       pch=17, col = rep(c(viridis(n=1, begin = 1), viridis(n=1, begin = 0.5), viridis(n=1, begin = 0)), times=c(20,20,20)))
 
 title(main = "Trajectories for October 28th 2013, backwards 200 hours",
       outer = T, line = -1.6)
@@ -504,19 +514,17 @@ legend(-53.9, 24.4, legend = c("500m", "1000m", "2000m"), bg = "transparent",
        fill = c(viridis(n=1, begin = 1), viridis(n=1, begin = 0.5), 
                 viridis(n=1, begin = 0)), title = "Starting altitude (m AGL)")
 
+alt_plot <- ggplot(data = MainTrajs[seq(1, nrow(MainTrajs), 10),], aes(x = -1*hour.inc, y = height)) +
+  geom_point(aes(color = factor(start_height)), shape = 17, size = 3) +
+  ggtitle("Trajectory altitude profile for October 28th 2013, backwards 200 hours") +
+  scale_color_viridis(begin = 1, end = 0, discrete = T, alpha = 1) +
+  ylab("Altitude (m AGL)") +
+  xlab("Hours before observation") +
+  theme(plot.title = element_text(hjust = 0.5)) + labs(color = "Start height") +
+  geom_line(data = MainTrajs, aes(x = -1*hour.inc, y = height, group = start_height, color = factor(start_height)))
 
+ggsave("Guiana_height_profile.pdf", plot = alt_plot, width = 2000, height = 2000*0.5, units = "px")
 
-
-#spTransform(pts, CRSobj = "+proj=longlat +datum=NAD27")
-#plotPoints(transformedPoints_df)
-#transformed_lat = (MainTrajs$lat - min(MainTrajs$lat))/(max(MainTrajs$lat)-min(MainTrajs$lat))
-#transformed_lon = (MainTrajs$lon - min(MainTrajs$lon))/(max(MainTrajs$lon)-min(MainTrajs$lon))
-#points(transformed_lon, transformed_lat)
+dev.off()
 
 #####__END__######
-n <- c(5.745974, -53.934047)
-h <- 500
-traj26 <- ProcTrajMod(lat = 5.75, lon = -53.93,
-                      hour.interval = 1, name = "traj", start.hour = "00:00", end.hour = "23:00",
-                      met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -200, height = 500, 
-                      hy.path = "C:/hysplit/", dates = c("2013-10-27"), tz = "UTC-3")
