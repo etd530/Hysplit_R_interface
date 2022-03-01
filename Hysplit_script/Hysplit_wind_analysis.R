@@ -21,12 +21,15 @@ height <- c(500, 1000, 2000)                               # height of the winds
 duration <- -200                             # how long forwards or backwards should the run go
 times <- list(c("06:00", "06:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
 hourInt <- 1                                # at which intervals should you start new trajectories (every 2 hours, etc.)
-TZ <- "Brazil/East"
+TZ <- "Brazil/East"                         # time zone to use
+bb <- as.matrix(cbind(c(-60.0, -12.0), c(10.0, 45.0))) #limits of the map for the plots
+colnames(bb) <- c("min", "max")
+rownames(bb) <- c("x", "y")
 
 ##### FUNCTIONS #####
 #modified version of PlotTrajFreq, so that we can change the scale of the plot and the color scale (I did not find a way to do it directly, it seemed to be hardcoded)
 plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "white", 
-                     pdf = F, file.name = "output", ...) 
+                     pdf = F, file.name = "output", bb,...) 
 {
   if (pdf == T) {
     pdf(file.name, paper = "USr", height = 0, width = 0)
@@ -39,24 +42,24 @@ plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "wh
     extra.args$main <- NULL
   }
   if (background == T) {
-    bb <- bbox(spGridDf)
+    bb
     PlotBgMap(spGridDf, xlim = bb[1, ], ylim = bb[2, ], 
               axes = TRUE)
     grid(col = "white")
     plot.add <- T
   }
   
-  grays <- colorRampPalette(c("yellow", "orange", "orangered", "red"))(10) #names are color range, number is how many colors to generate
+  grays <- colorRampPalette(c("yellow", "orange", "orangered", "red"))(12) #names are color range, number is how many colors to generate
   
-  grays[11] <- "#FFFFFF00"
-  grays[12] <- "#000000"
+  grays[length(grays)+1] <- "#FFFFFF00"
+  grays[length(grays)+1] <- "#000000"
   
   #if you change the number of colors in the previous line you must change breaks and legend accordingly
-  image(spGridDf, col = grays, breaks = (c(0, 0.01, 0.02, 0.03, 
-                                           0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.99, 1)), add = plot.add)
-  legend("topleft", legend = c("0.00 - 0.01", "0.01 - 0.02", "0.02 - 0.03", 
-                               "0.03 - 0.04", "0.04 - 0.05", "0.05 - 0.06", "0.06 - 0.07", 
-                               "0.07 - 0.08", "0.08 - 0.09", "0.09 - 0.1"), fill = grays)
+  image(spGridDf, col = grays, breaks = (c(0, 0.02, 0.04, 0.06, 
+                                           0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.2, 0.22, 0.24, 0.99, 1)), add = plot.add)
+  legend("topleft", legend = c("0.00 - 0.02", "0.02 - 0.04", "0.04 - 0.06", 
+                               "0.06 - 0.08", "0.08 - 0.10", "0.10 - 0.12", "0.12 - 0.14", 
+                               "0.14 - 0.16", "0.16 - 0.18", "0.18 - 0.2" ,"0.2 - 0.22", "0.22 - 0.24"), fill = grays)
   do.call(title, extra.args)
   if (!missing(overlay)) {
     plot(overlay, add = T, col = "black", border = "black")
@@ -245,7 +248,7 @@ for(i in 1:length(dateList)) {
 
 
 # Calculate trajectories ####
-pdf("./Guiana_winds_26-28_27-28.pdf")
+pdf("./Guiana_winds_25-28.pdf")
 #png(here("Winds_raster.png"), height=1000, width=700, res=600)
 #par(mfcol=c(2,2))
 for (n in coord){
@@ -314,7 +317,7 @@ for (n in coord){
         yearString <- if (length(yearList)==1) {yearList[1]} else {paste0(yearList[1],"-",yearList[length(yearList)])}
         plotRaster(traj_grid, main = paste0(month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                                             month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                                            yearString, " (", h, "m AGL)")) #plots the raster
+                                            yearString, " (", h, "m AGL)"), bb = bb) #plots the raster
         
         #add the starting height of the trajectories as a variable
         traj$start_height <- h
@@ -331,13 +334,22 @@ for (n in coord){
       
       #Plot the trajectories in a map
       setAlpha = ifelse(merged_trajlines_df$day == 28 & merged_trajlines_df$hour == 6, 1, 0.25)
-      PlotTraj(merged_trajlines_df,
-               col = ifelse(merged_trajlines_df$start_height == 500, 
-                                                viridis(n=1, alpha = setAlpha, begin = 1), 
-                                                ifelse(merged_trajlines_df$start_height == 1000,
-                                                viridis(n=1, alpha = setAlpha, begin = 0.5),
-                                                viridis(n=1, alpha = setAlpha, begin=0)))
-              )
+      PlotBgMap(merged_trajlines_df, xlim = bb[1, ], ylim = bb[2, ], axes = TRUE)
+      plot(merged_trajlines_df,
+           col = ifelse(merged_trajlines_df$start_height == 500, 
+                        viridis(n=1, alpha = setAlpha, begin = 1), 
+                        ifelse(merged_trajlines_df$start_height == 1000,
+                               viridis(n=1, alpha = setAlpha, begin = 0.5),
+                               viridis(n=1, alpha = setAlpha, begin=0))),
+           add = T,
+      )
+      #PlotTraj(merged_trajlines_df,
+      #         col = ifelse(merged_trajlines_df$start_height == 500, 
+      #                                         viridis(n=1, alpha = setAlpha, begin = 1), 
+      #                                         ifelse(merged_trajlines_df$start_height == 1000,
+      #                                         viridis(n=1, alpha = setAlpha, begin = 0.5),
+      #                                         viridis(n=1, alpha = setAlpha, begin=0)))
+      #       )
       
       title(main = paste0(month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                           month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
@@ -345,7 +357,7 @@ for (n in coord){
             outer = T, line = -1.6
       )
       
-      legend(0, 1, legend = c("500m", "1000m", "2000m"), bg = "transparent",
+      legend(bb[1,1], bb[2,2], legend = c("500m", "1000m", "2000m"), bg = "transparent",
              fill = c(viridis(n=1, begin = 1), viridis(n=1, begin = 0.5), 
                      viridis(n=1, begin = 0)), title = "Starting altitude (m AGL)")
       
@@ -492,7 +504,7 @@ transformedPoints_df <- SpatialPointsDataFrame(transformedPoints, as.data.frame(
 
 # Plot trajectories and points
 pdf("Guiana_main_traj_plots.pdf")
-bb <- bbox(MainTrajlines_df)
+#bb <- bbox(MainTrajlines_df)
 PlotBgMap(transformedPoints, xlim = bb[1, ], ylim = bb[2, ], axes = TRUE)
 plot(MainTrajlines_df,
          col = ifelse(MainTrajlines_df$height == 500, 
@@ -510,7 +522,7 @@ points(thinnedPoints,
 title(main = "Trajectories for October 28th 2013, backwards 200 hours",
       outer = T, line = -1.6)
 
-legend(-53.9, 24.4, legend = c("500m", "1000m", "2000m"), bg = "transparent",
+legend(bb[1,1], bb[2,2], legend = c("500m", "1000m", "2000m"), bg = "transparent",
        fill = c(viridis(n=1, begin = 1), viridis(n=1, begin = 0.5), 
                 viridis(n=1, begin = 0)), title = "Starting altitude (m AGL)")
 
