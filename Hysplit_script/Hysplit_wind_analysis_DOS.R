@@ -1,5 +1,6 @@
-#!/usr/bin/Rscript
-                                        #### HYSPLIT Program (prototype) ####
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R
+
+#### HYSPLIT Program (Windows version) ####
 
 #### Load packages ####
 library(splitr)       # to work with Hysplit (to download files mostly)
@@ -9,17 +10,105 @@ library(ggplot2)      # plotting library
 library(raster)       # needed for the lines that change the raster values, from maxValue until setValues, and for pointDistnace()
 library(geosphere)    # needed for bearing()
 library(viridis)      # colorblind-friendly color palettes
-library(plyr)
-library(getopt)
-                                        
+library(plyr)         # diverse useful functions
+library(optparse)     # Nice argument parsing
+
+
 #### Variables for the runs ####
+option_list = list(
+  make_option(c("-f", "--from"), type="character", default=NULL,
+              help="Starting date and time for the Hysplit runs. Provide in ddmmyyyy_hh:mm format, with hours in 24-hour format", metavar="character"),
+  
+  make_option(c("-t", "--to"), type="character", default=NULL,
+              help="Ending date and time for the Hysplit runs. Provide in ddmmyyyy_hh:mm format, with hours in 24-hour format", metavar="character"),
+  
+  make_option("--byhour", type = "integer", default=NULL,
+              help="Hour interval separating different trajectories", metavar = "integer"),
+  
+  make_option("--byday", type = "integer", default=1,
+              help = "Number specifying the intervals of days from which to run trajectories",
+              metavar = "integer"),
+  
+  make_option(c("-d", "--duration"), type = "integer", default = 1,
+              help = "Duration of each trajectory calculation in hours. Start with a '-' to do backwards trajectories",
+              metavar = "integer"),
+  
+  make_option(c("-L", "--lat"), type = "double", default = NULL,
+              help = "Latitude of the starting point of the trajecotries", metavar = "double"),
+  
+  make_option(c("l", "--lon"), type = "double", default = NULL,
+              help = "Longidute of the starting point of the trajecotries", metavar = "double"),
+  
+  make_option(c("-a", "--altitude"), type = "integer", default = NULL,
+              help = "Altitude (in meters above sea level) at which each trajectory will start",
+              metavar = "integer"),
+  
+  make_option(c("-z", "--timezone"), type = "character", default = "GMT",
+              help = "Time zone to use", metavar = "character"),
+  
+  make_option(c("-m", "--margin"), type = "character", default = NULL,
+              help = "Latitude and longitude determining the area of the maps. Provide in the order: minlon, minlat, maxlon, maxlat",
+              metavar = "character"),
+  
+  make_option(c("-v", "--verbose"), type = "logical", default = TRUE, action = "store_true",
+              help = "Select this option for verbose execution. Default behavior is TRUE",
+              metavar = "boolean"),
+  
+  make_option(c("-D", "--debug"), type = "logical", default = FALSE, action = "store_true",
+              help = "Messages for debugging. Only useulf for development",
+              metavar = "boolean")
+)
+
+opt_parser = OptionParser(option_list=option_list)
+opt = parse_args(opt_parser)
+
+`%!in%` = Negate(`%in%`)
+
+if (opt$debug) {
+  print(names(opt))
+  for (i in opt) {
+    print(i)
+    }
+  }
+
+if ("from" %!in% names(opt)) {
+  print("ERROR: Please specify a start date")
+  quit()
+}
+
+if ("to" %!in% names(opt)) {
+  print("ERROR: Please specify an ending date")
+  quit()
+}
+
+if (!grepl("([0-9]{8}_[0-9]{2}:[0-9]{2},?)+", opt$from)) {
+  print("ERROR: Please specify a valid start date")
+  quit()
+}
+
+if (!grepl("([0-9]{8}_[0-9]{2}:[0-9]{2},?)+", opt$to)) {
+  print("ERROR: Please specify a valid ending date")
+  quit()
+}
+
+
+dateList <- seq.Date(from = as.Date(opt$from, "%d%m%Y", tz = opt$timezone), 
+                     to = as.Date(opt$to, "%d%m%Y", tz = opt$timezone), 
+                     by = opt$byday)
+
+
+print(dateList)
+
+print("All is OK")
+quit()
+
 dayList <- c(22:31)                          # put the days of the month here, without caring about short months
 monthList <- c(10)                      # months go here
 yearList <- c(2013)                    # years
-dayblocks <- list(c(22:25), c(25:28), c(28:31))       # Set the blocks of days you want to run together to plot in the same map
+dayblocks <- list(c(22:23), c(23:24))       # Set the blocks of days you want to run together to plot in the same map
 coord <- list(c(5.745974, -53.934047))       # coordinates
-height <- c(500, 1000, 2000)                               # height of the winds at starting point
-duration <- -200                             # how long forwards or backwards should the run go
+height <- c(500)                               # height of the winds at starting point
+duration <- -10                             # how long forwards or backwards should the run go
 times <- list(c("06:00", "06:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
 hourInt <- 1                                # at which intervals should you start new trajectories (every 2 hours, etc.)
 TZ <- "Brazil/East"                         # time zone to use
