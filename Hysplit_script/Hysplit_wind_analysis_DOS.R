@@ -1,4 +1,4 @@
-#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 06051998_05:00 --to 07082007_09:00
 
 #### HYSPLIT Program (Windows version) ####
 
@@ -71,6 +71,7 @@ if (opt$debug) {
     }
   }
 
+# Making sure dates are properly provided
 if ("from" %!in% names(opt)) {
   print("ERROR: Please specify a start date")
   quit()
@@ -97,24 +98,42 @@ dateList <- seq.Date(from = as.Date(opt$from, "%d%m%Y", tz = opt$timezone),
                      by = opt$byday)
 
 
-print(dateList)
-
-print("All is OK")
-quit()
+if (opt$debug){print(dateList)}
 
 dayList <- c(22:31)                          # put the days of the month here, without caring about short months
 monthList <- c(10)                      # months go here
 yearList <- c(2013)                    # years
 dayblocks <- list(c(22:23), c(23:24))       # Set the blocks of days you want to run together to plot in the same map
-coord <- list(c(5.745974, -53.934047))       # coordinates
-height <- c(500)                               # height of the winds at starting point
-duration <- -10                             # how long forwards or backwards should the run go
+coord <- list(c(opt$lat, opt$lon))        # coordinates
+height <- c(opt$altitude)                               # height of the winds at starting point
+duration <- opt$duration                             # how long forwards or backwards should the run go
 times <- list(c("06:00", "06:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
-hourInt <- 1                                # at which intervals should you start new trajectories (every 2 hours, etc.)
-TZ <- "Brazil/East"                         # time zone to use
-bb <- as.matrix(cbind(c(-60.0, -12.0), c(10.0, 45.0))) #limits of the map for the plots
+hourInt <- opt$byhour                                # at which intervals should you start new trajectories (every 2 hours, etc.)
+
+# Get the timezone and print a warning if it is the default one
+TZ <- opt$timezone
+
+if (TZ == "GMT") {
+  print("#### WARNING: Timezone matches with the default of GMT. Please revise if you forgot to specify the time zone")
+} else {
+  print(paste("Timezone is", opt$timezone))
+}
+
+# Parse the margins to use for the maps
+if("margin" %in% names(opt)) {
+  opt$margin <- as.numeric(strsplit("-20,30,30,40", split=",")[[1]])
+  } else if (opt$verbose) {
+    print("No user-defined margins for maps. They will be determined by default")
+    }
+bb <- as.matrix(cbind(c(opt$margin[1], opt$margin[2]), c(opt$margin[3], opt$margin[4]))) #limits of the map for the plots
 colnames(bb) <- c("min", "max")
 rownames(bb) <- c("x", "y")
+
+if (opt$debug) {print(bb)}
+
+
+if(opt$debug){print("All is OK")}
+quit()
 
 ##### FUNCTIONS #####
 #modified version of PlotTrajFreq, so that we can change the scale of the plot and the color scale (I did not find a way to do it directly, it seemed to be hardcoded)
