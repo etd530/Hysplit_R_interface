@@ -1,4 +1,4 @@
-#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 06051998_05:00 --to 07082007_09:00
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 06051998_05:00 --to 07081999_09:00 --debug
 
 #### HYSPLIT Program (Windows version) ####
 
@@ -29,6 +29,8 @@ option_list = list(
               help = "Number specifying the intervals of days from which to run trajectories",
               metavar = "integer"),
   
+  # ADD BY MONTH AND BY YEAR; MAKE IT SO BY HOUR TAKES PRIORITY, THEN BY DAY, ETC.
+  
   make_option(c("-d", "--duration"), type = "integer", default = 1,
               help = "Duration of each trajectory calculation in hours. Start with a '-' to do backwards trajectories",
               metavar = "integer"),
@@ -47,7 +49,7 @@ option_list = list(
               help = "Time zone to use", metavar = "character"),
   
   make_option(c("-m", "--margin"), type = "character", default = NULL,
-              help = "Latitude and longitude determining the area of the maps. Provide in the order: minlon, minlat, maxlon, maxlat",
+              help = "Latitude and longitude determining the area of the maps. Provide in the order: minlon, minlat, maxlon, maxlat WITHOUT SPACES",
               metavar = "character"),
   
   make_option(c("-v", "--verbose"), type = "logical", default = TRUE, action = "store_true",
@@ -100,14 +102,22 @@ dateList <- seq.Date(from = as.Date(opt$from, "%d%m%Y", tz = opt$timezone),
 
 if (opt$debug){print(dateList)}
 
-dayList <- c(22:31)                          # put the days of the month here, without caring about short months
-monthList <- c(10)                      # months go here
-yearList <- c(2013)                    # years
+dayList <- days(dateList)               # put the days of the month here, without caring about short months
+print(dayList)
+monthList <- months(dateList)           # months go here
+print(monthList)
+yearList <- years(dateList)             # years
+print(yearList)
+quit()
 dayblocks <- list(c(22:23), c(23:24))       # Set the blocks of days you want to run together to plot in the same map
 coord <- list(c(opt$lat, opt$lon))        # coordinates
 height <- c(opt$altitude)                               # height of the winds at starting point
 duration <- opt$duration                             # how long forwards or backwards should the run go
-times <- list(c("06:00", "06:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
+start_hour <- gsub("[0-9]{8}_", "", opt$from)
+end_hour <- gsub("[0-9]{8}_", "", opt$to)
+times <- list(c(start_hour, end_hour))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
+rm(start_hour)
+rm(end_hour)
 hourInt <- opt$byhour                                # at which intervals should you start new trajectories (every 2 hours, etc.)
 
 # Get the timezone and print a warning if it is the default one
@@ -121,16 +131,19 @@ if (TZ == "GMT") {
 
 # Parse the margins to use for the maps
 if("margin" %in% names(opt)) {
-  opt$margin <- as.numeric(strsplit("-20,30,30,40", split=",")[[1]])
+  opt$margin <- gsub("'|`", "", opt$margin)
+  opt$margin <- as.numeric(strsplit(opt$margin, split=",")[[1]])
+  bb <- as.matrix(cbind(c(opt$margin[1], opt$margin[2]), c(opt$margin[3], opt$margin[4]))) #limits of the map for the plots
+  colnames(bb) <- c("min", "max")
+  rownames(bb) <- c("x", "y")
   } else if (opt$verbose) {
     print("No user-defined margins for maps. They will be determined by default")
+    bb <- NULL
     }
-bb <- as.matrix(cbind(c(opt$margin[1], opt$margin[2]), c(opt$margin[3], opt$margin[4]))) #limits of the map for the plots
-colnames(bb) <- c("min", "max")
-rownames(bb) <- c("x", "y")
 
 if (opt$debug) {print(bb)}
 
+if (opt$debug) {print(times)}
 
 if(opt$debug){print("All is OK")}
 quit()
@@ -386,7 +399,7 @@ for (n in coord){
                                   met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
                                   hy.path = "C:/hysplit/", dates = dateList[day(dateList) %in% j][dayNum], tz = TZ)
           
-          #Bind trajecotires for previous days to current one
+          #Bind trajectories for previous days to current one
           if (exists("traj")) {
             traj <- rbind(traj, CurrentTraj)
           } else {
