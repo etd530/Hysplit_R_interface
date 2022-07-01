@@ -1,4 +1,4 @@
-#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 06051998_05:00 --to 07081999_09:00 --debug
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 55.088505 --lon 20.736169 -- altitude 1000 --debug
 
 #### HYSPLIT Program (Windows version) ####
 
@@ -14,7 +14,7 @@ library(plyr)         # diverse useful functions
 library(optparse)     # Nice argument parsing
 
 
-#### Variables for the runs ####
+#### ARGS ####
 option_list = list(
   make_option(c("-f", "--from"), type="character", default=NULL,
               help="Starting date and time for the Hysplit runs. Provide in ddmmyyyy_hh:mm format, with hours in 24-hour format", metavar="character"),
@@ -29,7 +29,17 @@ option_list = list(
               help = "Number specifying the intervals of days from which to run trajectories",
               metavar = "integer"),
   
-  # ADD BY MONTH AND BY YEAR; MAKE IT SO BY HOUR TAKES PRIORITY, THEN BY DAY, ETC.
+  make_option("--bymonth", type = "integer", default = NULL,
+              help = "Number specifying the intervals of months from which to run trajectories",
+              metavar = "integer"),
+  
+  make_option("--byyear", type = "integer", default = NULL,
+              help = "Number specifying the intervals of years from which to run trajectories",
+              metavar = "integer"),
+  
+  make_option("--dayblocks", type="character", default=NULL,
+              help= "Blocks of days to include together in the same plot",
+              metavar = "character"),
   
   make_option(c("-d", "--duration"), type = "integer", default = 1,
               help = "Duration of each trajectory calculation in hours. Start with a '-' to do backwards trajectories",
@@ -52,6 +62,10 @@ option_list = list(
               help = "Latitude and longitude determining the area of the maps. Provide in the order: minlon, minlat, maxlon, maxlat WITHOUT SPACES",
               metavar = "character"),
   
+  make_option(c("-o", "--out"), type = "character", default = "windplots.pdf",
+              help = "Name to use for the output file containing the plots",
+              metavar = "character"),
+  
   make_option(c("-v", "--verbose"), type = "logical", default = TRUE, action = "store_true",
               help = "Select this option for verbose execution. Default behavior is TRUE",
               metavar = "boolean"),
@@ -64,15 +78,20 @@ option_list = list(
 opt_parser = OptionParser(option_list=option_list)
 opt = parse_args(opt_parser)
 
-`%!in%` = Negate(`%in%`)
+# MAKE IT SO BY HOUR TAKES PRIORITY, THEN BY DAY, ETC.
 
+# Print all arguments (for debugging)
 if (opt$debug) {
   print(names(opt))
   for (i in opt) {
     print(i)
-    }
   }
+}
 
+#### OPERATORS ####
+`%!in%` = Negate(`%in%`)
+
+#### ARG CHECKS ####
 # Making sure dates are properly provided
 if ("from" %!in% names(opt)) {
   print("ERROR: Please specify a start date")
@@ -94,39 +113,94 @@ if (!grepl("([0-9]{8}_[0-9]{2}:[0-9]{2},?)+", opt$to)) {
   quit()
 }
 
+# Check coordinates are provided
+if ("lat" %!in% names(opt)) {
+  print("ERROR: Please provide the latitude")
+  quit()
+}
 
+if ("lon" %!in% names(opt)) {
+  print("ERROR: Please provide the longitude")
+  quit()
+}
+
+# Check altitude is provided
+if ("altitude" %!in% names(opt)) {
+  print("ERROR: Please specify the altitude at which trajectories should start")
+  quit()
+}
+
+#### VARAIABLES ####
+# path to hysplit installation
+hy_path <- "C:/hysplit/"
+
+# name for output file
+outfile <- paste0("./", opt$out)
+
+### Parameters for the program
+# Dates to be run
 dateList <- seq.Date(from = as.Date(opt$from, "%d%m%Y", tz = opt$timezone), 
                      to = as.Date(opt$to, "%d%m%Y", tz = opt$timezone), 
                      by = opt$byday)
-
-
 if (opt$debug){print(dateList)}
 
-dayList <- days(dateList)               # put the days of the month here, without caring about short months
-print(dayList)
-monthList <- months(dateList)           # months go here
-print(monthList)
-yearList <- years(dateList)             # years
-print(yearList)
-quit()
-dayblocks <- list(c(22:23), c(23:24))       # Set the blocks of days you want to run together to plot in the same map
-coord <- list(c(opt$lat, opt$lon))        # coordinates
-height <- c(opt$altitude)                               # height of the winds at starting point
-duration <- opt$duration                             # how long forwards or backwards should the run go
+# Days of the month to be run, without caring about short months
+dayList <- sort(unique(day(dateList)))
+if (opt$debug){print(dayList)}
+
+# months to be run
+monthList <- unique(months(dateList))
+if(opt$debug){print(monthList)}
+
+# years to be run
+yearList <- unique(year(dateList))
+if(opt$debug){print(yearList)}
+
+# blocks of days that go together in a single plot
+dayblocks <- as.list(strsplit(opt$dayblocks, split = ",", fixed = T)[[1]])
+getDays = function(x){
+  c(as.integer(strsplit(x, split = ":", fixed = T)[[1]][1]):as.integer(strsplit(x, split = ":", fixed = T)[[1]][2]))
+} 
+dayblocks <- lapply(X = dayblocks, FUN = getDays)
+if(opt$debug){print(dayblocks)}
+
+# coordinates
+coord <- list(c(opt$lat, opt$lon))
+if(opt$debug){print(coord)}
+
+# height of the winds at starting point
+height <- c(opt$altitude)
+if(opt$debug){print(height)}
+
+# Duration of the runs; print a warning if it is the default value
+duration <- opt$duration
+if (duration == 1) {
+  print("#### WARNING: Duration matches the default value of 1. Please make sure this is the correct value")
+} else {
+  print(paste0("Duration is", duration))
+}
+
+# Starting and ending hours for the different trajectories
 start_hour <- gsub("[0-9]{8}_", "", opt$from)
 end_hour <- gsub("[0-9]{8}_", "", opt$to)
+
 times <- list(c(start_hour, end_hour))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
+if (opt$debug) {print(times)}
 rm(start_hour)
 rm(end_hour)
-hourInt <- opt$byhour                                # at which intervals should you start new trajectories (every 2 hours, etc.)
+
+# Interval of hours between different runs (one each hour, every two hours, etc.)
+hourInt <- opt$byhour
+if(opt$debug){print(hourInt)}
 
 # Get the timezone and print a warning if it is the default one
 TZ <- opt$timezone
+if(opt$debug){print(TZ)}
 
 if (TZ == "GMT") {
   print("#### WARNING: Timezone matches with the default of GMT. Please revise if you forgot to specify the time zone")
 } else {
-  print(paste("Timezone is", opt$timezone))
+  if(opt$verbose){print(paste("Timezone is:", opt$timezone))}
 }
 
 # Parse the margins to use for the maps
@@ -142,8 +216,6 @@ if("margin" %in% names(opt)) {
     }
 
 if (opt$debug) {print(bb)}
-
-if (opt$debug) {print(times)}
 
 if(opt$debug){print("All is OK")}
 quit()
@@ -396,8 +468,8 @@ for (n in coord){
           ###Calculate the trajectories
           CurrentTraj <- ProcTrajMod(lat = n[1], lon = n[2],
                                   hour.interval = hourInt, name = "traj", start.hour = startHour, end.hour = endHour,
-                                  met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                                  hy.path = "C:/hysplit/", dates = dateList[day(dateList) %in% j][dayNum], tz = TZ)
+                                  met = paste0(hy_path, "working/"), out = paste0(hy_path, "working/Out_files/"), hours = duration, height = h, 
+                                  hy.path = hy_path, dates = dateList[day(dateList) %in% j][dayNum], tz = TZ)
           
           #Bind trajectories for previous days to current one
           if (exists("traj")) {
@@ -586,27 +658,27 @@ for (n in coord){
 dev.off()
 
 
-
+quit()
 #### Main trajectories (October 28th at 6:00am) ####
 
 traj500 <- ProcTrajMod(lat = 5.75, lon = -53.93,
                       hour.interval = 1, name = "traj", start.hour = "06:00", end.hour = "06:00",
-                      met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -200, height = 500,
-                      hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = TZ)
+                      met = paste0(hy_path, "working/"), out = paste0(hy_path, "working/Out_files/"), hours = -200, height = 500,
+                      hy.path = hy_path, dates = c("2013-10-28"), tz = TZ)
 
 traj500$start_height <- 500
 
 traj1000 <- ProcTrajMod(lat = 5.75, lon = -53.93,
                        hour.interval = 1, name = "traj", start.hour = "06:00", end.hour = "06:00",
-                       met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -200, height = 1000,
-                       hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = TZ)
+                       met = paste0(hy_path, "working/"), out = paste0(hy_path, "working/Out_files/"), hours = -200, height = 1000,
+                       hy.path = hy_path, dates = c("2013-10-28"), tz = TZ)
 
 traj1000$start_height <- 1000
 
 traj2000 <- ProcTrajMod(lat = 5.75, lon = -53.93,
                         hour.interval = 1, name = "traj", start.hour = "06:00", end.hour = "06:00",
-                        met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -200, height = 2000,
-                        hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = TZ)
+                        met = paste0(hy_path, "working/"), out = paste0(hy_path, "working/Out_files/"), hours = -200, height = 2000,
+                        hy.path = hy_path, dates = c("2013-10-28"), tz = TZ)
 
 traj2000$start_height <- 2000
 
