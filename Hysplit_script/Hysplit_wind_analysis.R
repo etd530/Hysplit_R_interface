@@ -13,10 +13,10 @@ library(plyr)
 library(getopt)
                                         
 #### Variables for the runs ####
-dayList <- c(22:31)                          # put the days of the month here, without caring about short months
+dayList <- c(22:25)                          # put the days of the month here, without caring about short months
 monthList <- c(10)                      # months go here
 yearList <- c(2013)                    # years
-dayblocks <- list(c(22:25), c(25:28), c(28:31))       # Set the blocks of days you want to run together to plot in the same map
+dayblocks <- list(c(22:25))#, c(25:28), c(28:31))       # Set the blocks of days you want to run together to plot in the same map
 coord <- list(c(5.745974, -53.934047))       # coordinates
 height <- c(500, 1000, 2000)                               # height of the winds at starting point
 duration <- -200                             # how long forwards or backwards should the run go
@@ -276,7 +276,8 @@ for (n in coord){
           CurrentTraj <- ProcTrajMod(lat = n[1], lon = n[2],
                                   hour.interval = hourInt, name = "traj", start.hour = startHour, end.hour = endHour,
                                   met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                                  hy.path = "C:/hysplit/", dates = dateList[day(dateList) %in% j][dayNum], tz = TZ)
+                                  hy.path = "C:/hysplit/", dates = dateList[day(dateList) %in% j][dayNum], tz = TZ,
+                                  clean.files = T)
           
           #Bind trajecotires for previous days to current one
           if (exists("traj")) {
