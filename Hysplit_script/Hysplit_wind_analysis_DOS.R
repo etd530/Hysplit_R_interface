@@ -1,8 +1,7 @@
-#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 55.088505 --lon 20.736169 --altitude 500,1000,2000 --duration -200 --out test.pdf --byhour 1
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 01042013_00:00 --to 30112013_23:00 --dayblocks 01:10,11:20,21:31 --lat 55.088505 --lon 20.736169 --altitude 500 --duration -24 --out test_Kaliningrad.pdf --byhour 1 --verbose
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_Guyana.pdf --byhour 1 --verbose
 
 #### HYSPLIT Program (Windows version) ####
-
-# options(error=function()traceback(2))
 
 #### Load packages ####
 library(splitr)       # to work with Hysplit (to download files mostly)
@@ -142,6 +141,10 @@ hy_path <- "C:/hysplit/"
 # name for output file
 outfile <- paste0("./", opt$out)
 
+# projection, datum, etc.
+PRJ <- proj4string(CRS("+init=epsg:4326")) #WGS84
+#PRJ <- proj4string(CRS('+proj=eck4')) #ECK4
+
 ### Parameters for the program
 # Dates to be run
 dateList <- seq.Date(from = as.Date(opt$from, "%d%m%Y", tz = opt$timezone), 
@@ -217,12 +220,12 @@ if("margin" %in% names(opt)) {
   opt$margin <- gsub("'|`", "", opt$margin)
   opt$margin <- as.numeric(strsplit(opt$margin, split=",")[[1]])
   bb <- as.matrix(cbind(c(opt$margin[1], opt$margin[2]), c(opt$margin[3], opt$margin[4]))) #limits of the map for the plots
+  colnames(bb) <- c("min", "max")
+  rownames(bb) <- c("x", "y")
   } else if (opt$verbose) {
     print("No user-defined margins for maps. They will be determined by default")
-    bb <- as.matrix(cbind(c(round(opt$lon - 40), round(opt$lat - 40)), c(round(opt$lon + 40), round(opt$lat + 40))))
+    # bb <- as.matrix(cbind(c(round(opt$lon - 40), round(opt$lat - 40)), c(round(opt$lon + 40), round(opt$lat + 40))))
     }
-colnames(bb) <- c("min", "max")
-rownames(bb) <- c("x", "y")
 
 if (opt$debug) {print(bb)}
 
@@ -253,16 +256,25 @@ plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "wh
   }
   
   grays <- colorRampPalette(c("yellow", "orange", "orangered", "red"))(12) #names are color range, number is how many colors to generate
-  
+
   grays[length(grays)+1] <- "#FFFFFF00"
   grays[length(grays)+1] <- "#000000"
-  
+
   #if you change the number of colors in the previous line you must change breaks and legend accordingly
-  image(spGridDf, col = grays, breaks = (c(0, 0.02, 0.04, 0.06, 
+  image(spGridDf, col = grays, breaks = (c(0, 0.02, 0.04, 0.06,
                                            0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.2, 0.22, 0.24, 0.99, 1)), add = plot.add)
-  legend("topleft", legend = c("0.00 - 0.02", "0.02 - 0.04", "0.04 - 0.06", 
-                               "0.06 - 0.08", "0.08 - 0.10", "0.10 - 0.12", "0.12 - 0.14", 
+  legend("topleft", legend = c("0.00 - 0.02", "0.02 - 0.04", "0.04 - 0.06",
+                               "0.06 - 0.08", "0.08 - 0.10", "0.10 - 0.12", "0.12 - 0.14",
                                "0.14 - 0.16", "0.16 - 0.18", "0.18 - 0.2" ,"0.2 - 0.22", "0.22 - 0.24"), fill = grays)
+  
+  # grays <- colorRampPalette(c("yellow", "orange", "orangered", "red"))(10) #names are color range, number is how many colors to generate
+  # 
+  # #if you change the number of colors in the previous line you must change breaks and legend accordingly
+  # image(spGridDf, col = grays, breaks = (c(0, 0.1, 0.2, 0.3,
+  #                                          0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)), add = plot.add)
+  # legend("topleft", legend = c("0.0 - 0.1", "0.1 - 0.2", "0.2 - 0.3", "0.3 - 0.4", "0.4 - 0.5",
+  #                              "0.5 - 0.6", "0.6 - 0.7", "0.7 - 0.8", "0.8 - 0.9", "0.9 - 1.0"), fill = grays)
+  
   do.call(title, extra.args)
   if (!missing(overlay)) {
     plot(overlay, add = T, col = "black", border = "black")
@@ -496,7 +508,7 @@ for (n in coord){
         }
         
         # get the SpatialLinesDf
-        traj_lines<-Df2SpLines(traj, crs = "+proj=longlat +datum=NAD27") #here I just took the crs value from the documentation example as I am not familiar with datums and all that, it may need to be changed
+        traj_lines<-Df2SpLines(traj, crs = PRJ)#"+proj=longlat +datum=NAD27") #here I just took the crs value from the documentation example as I am not familiar with datums and all that, it may need to be changed
         traj_lines_df<-Df2SpLinesDf(traj_lines, traj, add.distance = T, add.azimuth = T) #this line is not really needed but it may be useful for other things
         
         # add starting height to the SpatialLinesDf
@@ -508,6 +520,9 @@ for (n in coord){
         } else {
           merged_trajlines_df <- traj_lines_df
         }
+
+        # filter raster to avoid large latitudes (TEMPORARY FIX!!!)
+        #traj_lines <- crop(traj_lines, extent(-180, 180, -70, 70))
         
         #generates a raster, where each cell has the number of trajectories that pass through it
         traj_freq<- RasterizeTraj(traj_lines, parallel = T) #switch to parallel=T to calculate in parallel, but with very few trajectories (less than 8 I think)
@@ -525,6 +540,9 @@ for (n in coord){
         #plot the rasterized trajectories
         traj_grid<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
         yearString <- if (length(yearList)==1) {yearList[1]} else {paste0(yearList[1],"-",yearList[length(yearList)])}
+        if ("margin" %!in% names(opt)) {
+          bb <- sp::bbox(traj_lines_df)
+        }
         plotRaster(traj_grid, main = paste0(month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                                             month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
                                             yearString, " (", h, "m AGL)"), bb = bb) #plots the raster
@@ -544,6 +562,9 @@ for (n in coord){
       
       #Plot the trajectories in a map
       setAlpha = ifelse(merged_trajlines_df$day == 28 & merged_trajlines_df$hour == 6, 1, 0.25)
+      if ("margin" %!in% names(opt)) {
+        bb <- sp::bbox(merged_trajlines_df) 
+      }
       PlotBgMap(merged_trajlines_df, xlim = bb[1, ], ylim = bb[2, ], axes = TRUE)
       plot(merged_trajlines_df,
            col = ifelse(merged_trajlines_df$start_height == 500, 
@@ -603,25 +624,25 @@ for (n in coord){
           theme(plot.title = element_text(hjust = 0.5))
         print(windrose)
         
-        # Build windrose plot for -200h
+        # Build windrose plot considering only the ending points of each trajectory
         
-        windrose = ggplot(data=merged_trajs[merged_trajs$start_height == h & merged_trajs$hour.inc == -200,], aes(x=angle, y=stat(count/sum(count)))) + 
+        windrose = ggplot(data=merged_trajs[merged_trajs$start_height == h & merged_trajs$hour.inc == duration,], aes(x=angle, y=stat(count/sum(count)))) + 
           geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill =  gsub("FF", "", color)) +
           coord_polar(start = 0, clip = "off") +
           ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                          month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                         yearString, "\n(backwards 200h, ",h, "m AGL)")) +
+                         yearString, "\n(backwards ", abs(duration),"h, ",h, "m AGL)")) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
         print(windrose)
         
-        # Build windrose plot for -100h
-        windrose = ggplot(data=merged_trajs[merged_trajs$start_height == h & merged_trajs$hour.inc == -100,], aes(x=angle, y=stat(count/sum(count)))) + 
+        # Build windrose plot considering only the points halfway through the trajectories
+        windrose = ggplot(data=merged_trajs[merged_trajs$start_height == h & merged_trajs$hour.inc == duration/2,], aes(x=angle, y=stat(count/sum(count)))) + 
           geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill =  gsub("FF", "", color)) +
           coord_polar(start = 0, clip = "off") +
           ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                          month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                         yearString, "\n(backwards 100h, ", h, "m AGL)")) +
+                         yearString, "\n(backwards ", abs(duration)/2, "h, ", h, "m AGL)")) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
         print(windrose)
@@ -641,28 +662,28 @@ for (n in coord){
         theme(plot.title = element_text(hjust = 0.5))
       print(windrose)
       
-      # Build windrose plot for -200h
+      # Build windrose plot considering only the ending points of the trajectories
       
-      windrose = ggplot(data=merged_trajs[merged_trajs$hour.inc == -200,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
+      windrose = ggplot(data=merged_trajs[merged_trajs$hour.inc == opt$duration,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
                                                fill=start_height)) + 
         geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
         coord_polar(start = 0, clip = "off") +
         ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                        month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                       yearString, " (backwards 200h)")) +
+                       yearString, " (backwards ", abs(duration), "h)")) +
         scale_fill_viridis(discrete = T, alpha = 1) +
         scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
         theme(plot.title = element_text(hjust = 0.5))
       print(windrose)
       
       # Build windrose plot for -100h
-      windrose = ggplot(data=merged_trajs[merged_trajs$hour.inc == -100,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
+      windrose = ggplot(data=merged_trajs[merged_trajs$hour.inc == opt$duration/2,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
                                                                                fill=start_height)) + 
         geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
         coord_polar(start = 0, clip = "off") +
         ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                        month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                       yearString, " (backwards 100h)")) +
+                       yearString, " (backwards ", abs(duration)/2, "h)")) +
         scale_fill_viridis(discrete = T, alpha = 1) +
         scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
         theme(plot.title = element_text(hjust = 0.5))
@@ -679,6 +700,12 @@ if(opt$verbose){
     cat(paste0('All trajectories computed.\nPlots stored in "', outfile,'".\nExiting program.'))
     }
   }
+
+save.image(".RData")
+
+if(opt$verbose) {
+  cat("All R objects saved to .RData")
+}
 
 quit()
 
@@ -710,13 +737,13 @@ MainTrajs <- rbind(traj500, traj1000, traj2000)
 
 
 # Convert to Ds2SpLines and Ds2SpLinesDf
-MainTrajlines <- Df2SpLines(MainTrajs, crs = "+proj=longlat +datum=NAD27")
+MainTrajlines <- Df2SpLines(MainTrajs, crs = PRJ)
 MainTrajlines_df <- Df2SpLinesDf(MainTrajlines, MainTrajs, add.distance = T, add.azimuth = T)
 
 
 # creating SpatialPoitns object for plotting
 pts <- cbind(MainTrajs$lon, MainTrajs$lat, MainTrajs$height)
-transformedPoints <- SpatialPoints(pts, proj4string = CRS("+proj=longlat +datum=NAD27"))
+transformedPoints <- SpatialPoints(pts, proj4string = CRS(PRJ))
 transformedPoints_df <- SpatialPointsDataFrame(transformedPoints, as.data.frame(pts))
 
 # Plot trajectories and points
@@ -736,7 +763,7 @@ thinnedPoints <- transformedPoints_df@coords[seq(10, nrow(transformedPoints_df@c
 points(thinnedPoints, 
        pch=17, col = rep(c(viridis(n=1, begin = 1), viridis(n=1, begin = 0.5), viridis(n=1, begin = 0)), times=c(20,20,20)))
 
-title(main = "Trajectories for October 28th 2013, backwards 200 hours",
+title(main = "Trajectories for October 28th 2013, backwards ", abs(duration), " hours",
       outer = T, line = -1.6)
 
 legend(bb[1,1], bb[2,2], legend = c("500m", "1000m", "2000m"), bg = "transparent",
@@ -745,7 +772,7 @@ legend(bb[1,1], bb[2,2], legend = c("500m", "1000m", "2000m"), bg = "transparent
 
 alt_plot <- ggplot(data = MainTrajs[seq(1, nrow(MainTrajs), 10),], aes(x = -1*hour.inc, y = height)) +
   geom_point(aes(color = factor(start_height)), shape = 17, size = 3) +
-  ggtitle("Trajectory altitude profile for October 28th 2013, backwards 200 hours") +
+  ggtitle("Trajectory altitude profile for October 28th 2013, backwards ", abs(duration), " hours") +
   scale_color_viridis(begin = 1, end = 0, discrete = T, alpha = 1) +
   ylab("Altitude (m AGL)") +
   xlab("Hours before observation") +
