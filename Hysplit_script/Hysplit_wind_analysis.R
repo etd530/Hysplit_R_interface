@@ -1,5 +1,7 @@
-#!/usr/bin/Rscript
-                                        #### HYSPLIT Program (prototype) ####
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 01042013_00:00 --to 30112013_23:00 --dayblocks 01:10,11:20,21:31 --lat 55.088505 --lon 20.736169 --altitude 500 --duration -24 --out test_Kaliningrad.pdf --byhour 1 --verbose
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_Guyana.pdf --byhour 1 --verbose
+
+#### HYSPLIT Program (Windows version) ####
 
 #### Load packages ####
 library(splitr)       # to work with Hysplit (to download files mostly)
@@ -9,23 +11,226 @@ library(ggplot2)      # plotting library
 library(raster)       # needed for the lines that change the raster values, from maxValue until setValues, and for pointDistnace()
 library(geosphere)    # needed for bearing()
 library(viridis)      # colorblind-friendly color palettes
-library(plyr)
-library(getopt)
-                                        
-#### Variables for the runs ####
-dayList <- c(22:25)                          # put the days of the month here, without caring about short months
-monthList <- c(10)                      # months go here
-yearList <- c(2013)                    # years
-dayblocks <- list(c(22:25))#, c(25:28), c(28:31))       # Set the blocks of days you want to run together to plot in the same map
-coord <- list(c(5.745974, -53.934047))       # coordinates
-height <- c(500, 1000, 2000)                               # height of the winds at starting point
-duration <- -200                             # how long forwards or backwards should the run go
-times <- list(c("06:00", "06:00"))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
-hourInt <- 1                                # at which intervals should you start new trajectories (every 2 hours, etc.)
-TZ <- "Brazil/East"                         # time zone to use
-bb <- as.matrix(cbind(c(-60.0, -12.0), c(10.0, 45.0))) #limits of the map for the plots
-colnames(bb) <- c("min", "max")
-rownames(bb) <- c("x", "y")
+library(plyr)         # diverse useful functions
+library(optparse)     # Nice argument parsing
+
+
+#### ARGS ####
+option_list = list(
+  make_option(c("-f", "--from"), type="character", default=NULL,
+              help="Starting date and time for the Hysplit runs. Provide in ddmmyyyy_hh:mm format, with hours in 24-hour format", metavar="character"),
+  
+  make_option(c("-t", "--to"), type="character", default=NULL,
+              help="Ending date and time for the Hysplit runs. Provide in ddmmyyyy_hh:mm format, with hours in 24-hour format", metavar="character"),
+  
+  make_option("--byhour", type = "integer", default=NULL,
+              help="Hour interval separating different trajectories", metavar = "integer"),
+  
+  make_option("--byday", type = "integer", default=1,
+              help = "Number specifying the intervals of days from which to run trajectories",
+              metavar = "integer"),
+  
+  make_option("--bymonth", type = "integer", default = NULL,
+              help = "Number specifying the intervals of months from which to run trajectories",
+              metavar = "integer"),
+  
+  make_option("--byyear", type = "integer", default = NULL,
+              help = "Number specifying the intervals of years from which to run trajectories",
+              metavar = "integer"),
+  
+  make_option("--dayblocks", type="character", default=NULL,
+              help= "Blocks of days to include together in the same plot",
+              metavar = "character"),
+  
+  make_option(c("-d", "--duration"), type = "integer", default = 1,
+              help = "Duration of each trajectory calculation in hours. Start with a '-' to do backwards trajectories",
+              metavar = "integer"),
+  
+  make_option(c("-L", "--lat"), type = "double", default = NULL,
+              help = "Latitude of the starting point of the trajecotries", metavar = "double"),
+  
+  make_option(c("l", "--lon"), type = "double", default = NULL,
+              help = "Longidute of the starting point of the trajecotries", metavar = "double"),
+  
+  make_option(c("-a", "--altitude"), type = "integer", default = NULL,
+              help = "Altitude (in meters above sea level) at which each trajectory will start",
+              metavar = "integer"),
+  
+  make_option(c("-z", "--timezone"), type = "character", default = "GMT",
+              help = "Time zone to use", metavar = "character"),
+  
+  make_option(c("-m", "--margin"), type = "character", default = NULL,
+              help = "Latitude and longitude determining the area of the maps. Provide in the order: minlon, minlat, maxlon, maxlat WITHOUT SPACES",
+              metavar = "character"),
+  
+  make_option(c("-o", "--out"), type = "character", default = "windplots.pdf",
+              help = "Name to use for the output file containing the plots",
+              metavar = "character"),
+  
+  make_option(c("-v", "--verbose"), type = "logical", default = TRUE, action = "store_true",
+              help = "Select this option for verbose execution. Default behavior is TRUE",
+              metavar = "boolean"),
+  
+  make_option(c("-D", "--debug"), type = "logical", default = FALSE, action = "store_true",
+              help = "Messages for debugging. Only useulf for development",
+              metavar = "boolean")
+)
+
+opt_parser = OptionParser(option_list=option_list)
+opt = parse_args(opt_parser)
+
+# MAKE IT SO BY HOUR TAKES PRIORITY, THEN BY DAY, ETC.
+
+# Print all arguments (for debugging)
+if (opt$debug) {
+  for (i in c(1:length(names(opt)))) {
+    print(opt[i])
+  }
+  # print(names(opt))
+  # for (i in opt) {
+  #   print(i)
+  # }
+}
+
+#### OPERATORS ####
+`%!in%` = Negate(`%in%`)
+
+#### ARG CHECKS ####
+# Making sure dates are properly provided
+if ("from" %!in% names(opt)) {
+  print("ERROR: Please specify a start date")
+  quit()
+}
+
+if ("to" %!in% names(opt)) {
+  print("ERROR: Please specify an ending date")
+  quit()
+}
+
+if (!grepl("([0-9]{8}_[0-9]{2}:[0-9]{2},?)+", opt$from)) {
+  print("ERROR: Please specify a valid start date")
+  quit()
+}
+
+if (!grepl("([0-9]{8}_[0-9]{2}:[0-9]{2},?)+", opt$to)) {
+  print("ERROR: Please specify a valid ending date")
+  quit()
+}
+
+# Check coordinates are provided
+if ("lat" %!in% names(opt)) {
+  print("ERROR: Please provide the latitude")
+  quit()
+}
+
+if ("lon" %!in% names(opt)) {
+  print("ERROR: Please provide the longitude")
+  quit()
+}
+
+# Check altitude is provided
+if ("altitude" %!in% names(opt)) {
+  print("ERROR: Please specify the altitude at which trajectories should start")
+  quit()
+}
+
+#### VARIABLES ####
+# path to hysplit installation
+hy_path <- "C:/hysplit/"
+
+# name for output file
+outfile <- paste0("./", opt$out)
+
+# projection, datum, etc.
+PRJ <- proj4string(CRS("+init=epsg:4326")) #WGS84
+#PRJ <- proj4string(CRS('+proj=eck4')) #ECK4
+
+### Parameters for the program
+# Dates to be run
+dateList <- seq.Date(from = as.Date(opt$from, "%d%m%Y", tz = opt$timezone), 
+                     to = as.Date(opt$to, "%d%m%Y", tz = opt$timezone), 
+                     by = opt$byday)
+if (opt$debug){print(dateList)}
+
+# Days of the month to be run, without caring about short months
+dayList <- sort(unique(day(dateList)))
+if (opt$debug){print(dayList)}
+
+# months to be run
+monthList <- unique(month(dateList))
+if(opt$debug){print(monthList)}
+
+# years to be run
+yearList <- unique(year(dateList))
+if(opt$debug){print(yearList)}
+
+# blocks of days that go together in a single plot
+dayblocks <- as.list(strsplit(opt$dayblocks, split = ",", fixed = T)[[1]])
+getDays = function(x){
+  c(as.integer(strsplit(x, split = ":", fixed = T)[[1]][1]):as.integer(strsplit(x, split = ":", fixed = T)[[1]][2]))
+} 
+dayblocks <- lapply(X = dayblocks, FUN = getDays)
+if(opt$debug){print(dayblocks)}
+
+# coordinates
+coord <- list(c(opt$lat, opt$lon))
+if(opt$debug){print(coord)}
+
+# height of the winds at starting point
+if(is.integer(opt$altitude)) {
+  height <- c(opt$altitude) 
+} else {
+  height <- as.integer(as.vector(strsplit(opt$altitude, split = ",")[[1]]))
+}
+if(opt$debug){print(height)}
+
+# Duration of the runs; print a warning if it is the default value
+duration <- opt$duration
+if (duration == 1) {
+  print("#### WARNING: Duration matches the default value of 1. Please make sure this is the correct value")
+} else {
+  print(paste0("Duration is", duration))
+}
+
+# Starting and ending hours for the different trajectories
+start_hour <- gsub("[0-9]{8}_", "", opt$from)
+end_hour <- gsub("[0-9]{8}_", "", opt$to)
+
+times <- list(c(start_hour, end_hour))          # first and last hour on which the trajectories should start (put the same to run just at one hour)
+if (opt$debug) {print(times)}
+rm(start_hour)
+rm(end_hour)
+
+# Interval of hours between different runs (one each hour, every two hours, etc.)
+hourInt <- opt$byhour
+if(opt$debug){print(hourInt)}
+
+# Get the timezone and print a warning if it is the default one
+TZ <- opt$timezone
+if(opt$debug){print(TZ)}
+
+if (TZ == "GMT") {
+  print("#### WARNING: Timezone matches with the default of GMT. Please revise if you forgot to specify the time zone")
+} else {
+  if(opt$verbose){print(paste("Timezone is:", opt$timezone))}
+}
+
+# Parse the margins to use for the maps
+if("margin" %in% names(opt)) {
+  opt$margin <- gsub("'|`", "", opt$margin)
+  opt$margin <- as.numeric(strsplit(opt$margin, split=",")[[1]])
+  bb <- as.matrix(cbind(c(opt$margin[1], opt$margin[2]), c(opt$margin[3], opt$margin[4]))) #limits of the map for the plots
+  colnames(bb) <- c("min", "max")
+  rownames(bb) <- c("x", "y")
+  } else if (opt$verbose) {
+    print("No user-defined margins for maps. They will be determined by default")
+    # bb <- as.matrix(cbind(c(round(opt$lon - 40), round(opt$lat - 40)), c(round(opt$lon + 40), round(opt$lat + 40))))
+    }
+
+if (opt$debug) {print(bb)}
+
+if(opt$debug){print("All is OK")}
+if (opt$debug){quit()}
 
 ##### FUNCTIONS #####
 #modified version of PlotTrajFreq, so that we can change the scale of the plot and the color scale (I did not find a way to do it directly, it seemed to be hardcoded)
@@ -51,16 +256,25 @@ plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "wh
   }
   
   grays <- colorRampPalette(c("yellow", "orange", "orangered", "red"))(12) #names are color range, number is how many colors to generate
-  
+
   grays[length(grays)+1] <- "#FFFFFF00"
   grays[length(grays)+1] <- "#000000"
-  
+
   #if you change the number of colors in the previous line you must change breaks and legend accordingly
-  image(spGridDf, col = grays, breaks = (c(0, 0.02, 0.04, 0.06, 
+  image(spGridDf, col = grays, breaks = (c(0, 0.02, 0.04, 0.06,
                                            0.08, 0.10, 0.12, 0.14, 0.16, 0.18, 0.2, 0.22, 0.24, 0.99, 1)), add = plot.add)
-  legend("topleft", legend = c("0.00 - 0.02", "0.02 - 0.04", "0.04 - 0.06", 
-                               "0.06 - 0.08", "0.08 - 0.10", "0.10 - 0.12", "0.12 - 0.14", 
+  legend("topleft", legend = c("0.00 - 0.02", "0.02 - 0.04", "0.04 - 0.06",
+                               "0.06 - 0.08", "0.08 - 0.10", "0.10 - 0.12", "0.12 - 0.14",
                                "0.14 - 0.16", "0.16 - 0.18", "0.18 - 0.2" ,"0.2 - 0.22", "0.22 - 0.24"), fill = grays)
+  
+  # grays <- colorRampPalette(c("yellow", "orange", "orangered", "red"))(10) #names are color range, number is how many colors to generate
+  # 
+  # #if you change the number of colors in the previous line you must change breaks and legend accordingly
+  # image(spGridDf, col = grays, breaks = (c(0, 0.1, 0.2, 0.3,
+  #                                          0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)), add = plot.add)
+  # legend("topleft", legend = c("0.0 - 0.1", "0.1 - 0.2", "0.2 - 0.3", "0.3 - 0.4", "0.4 - 0.5",
+  #                              "0.5 - 0.6", "0.6 - 0.7", "0.7 - 0.8", "0.8 - 0.9", "0.9 - 1.0"), fill = grays)
+  
   do.call(title, extra.args)
   if (!missing(overlay)) {
     plot(overlay, add = T, col = "black", border = "black")
@@ -192,8 +406,10 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
   traj
 }
 
-##### END FUNCTIONS #####
+#### END FUNCTIONS ###
 
+
+#### START PROGRAM ####
 # Creating the list with the days of interest ####
 dateList <- as.vector(5) # just creating a vector
 for(i in 1:length(yearList)) {
@@ -203,6 +419,7 @@ for(i in 1:length(yearList)) {
     }
   }
 } # this loop generates the dates
+
 
 dateList <- as.Date(dateList) # change from strings to Date objects
 dateList <- na.omit(dateList) # remove NAs (i.e. remove impossible dates such as February 31)
@@ -220,11 +437,12 @@ prevDates <- seq.Date(if (monthList[1]==01) as.Date(paste(yearList[1]-1, "12", "
                      length.out = NULL)                             # period length
 
 # Get meteorological files:
+if (opt$verbose){print("Downloading necessary meteorological files...")}
 # I think with the loop is better because if you put the whole list directly in the "days" argument it seems to go over all the months in the middle
 # and download unnecessary files
 for(i in 1:length(prevDates)) {
   get_met_reanalysis(days = prevDates[i], duration = 12, direction = "forward",
-                     path_met_files = "C:/hysplit/working")
+                     path_met_files = paste0(hy_path, "working"))
 }
 
 # Generate list with dates of next month
@@ -238,18 +456,21 @@ postDates <- seq.Date(if (monthList[length(monthList)]==12) as.Date(paste(yearLi
 # Get the files; as before the loop should save time
 for(i in 1:length(postDates)) {
   get_met_reanalysis(days = postDates[i], duration = 12, direction = "forward",
-                     path_met_files = "C:/hysplit/working")
+                     path_met_files = paste0(hy_path,"working"))
 }
 
 # Get the files for the dates of interest; since the files are by month it does not matter here if the list has more days than needed, it will skip files already downloaded
 for(i in 1:length(dateList)) {
   get_met_reanalysis(days = dateList[i], duration = 48, direction = "backward",
-                     path_met_files = "C:/hysplit/working")
+                     path_met_files = paste0(hy_path, "working"))
 }
+
+if(opt$verbose){print("All files successfully downloaded.")}
 
 
 # Calculate trajectories ####
-pdf("./Guiana_winds_25-28.pdf")
+if(opt$verbose){print("Starting trajectory calculations. Please wait...")}
+pdf(outfile)
 #png(here("Winds_raster.png"), height=1000, width=700, res=600)
 #par(mfcol=c(2,2))
 for (n in coord){
@@ -275,11 +496,10 @@ for (n in coord){
           ###Calculate the trajectories
           CurrentTraj <- ProcTrajMod(lat = n[1], lon = n[2],
                                   hour.interval = hourInt, name = "traj", start.hour = startHour, end.hour = endHour,
-                                  met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = duration, height = h, 
-                                  hy.path = "C:/hysplit/", dates = dateList[day(dateList) %in% j][dayNum], tz = TZ,
-                                  clean.files = T)
+                                  met = paste0(hy_path, "working/"), out = paste0(hy_path, "working/Out_files/"), hours = duration, height = h, 
+                                  hy.path = hy_path, dates = dateList[day(dateList) %in% j][dayNum], tz = TZ)
           
-          #Bind trajecotires for previous days to current one
+          #Bind trajectories for previous days to current one
           if (exists("traj")) {
             traj <- rbind(traj, CurrentTraj)
           } else {
@@ -288,7 +508,7 @@ for (n in coord){
         }
         
         # get the SpatialLinesDf
-        traj_lines<-Df2SpLines(traj, crs = "+proj=longlat +datum=NAD27") #here I just took the crs value from the documentation example as I am not familiar with datums and all that, it may need to be changed
+        traj_lines<-Df2SpLines(traj, crs = PRJ)#"+proj=longlat +datum=NAD27") #here I just took the crs value from the documentation example as I am not familiar with datums and all that, it may need to be changed
         traj_lines_df<-Df2SpLinesDf(traj_lines, traj, add.distance = T, add.azimuth = T) #this line is not really needed but it may be useful for other things
         
         # add starting height to the SpatialLinesDf
@@ -300,6 +520,9 @@ for (n in coord){
         } else {
           merged_trajlines_df <- traj_lines_df
         }
+
+        # filter raster to avoid large latitudes (TEMPORARY FIX!!!)
+        #traj_lines <- crop(traj_lines, extent(-180, 180, -70, 70))
         
         #generates a raster, where each cell has the number of trajectories that pass through it
         traj_freq<- RasterizeTraj(traj_lines, parallel = T) #switch to parallel=T to calculate in parallel, but with very few trajectories (less than 8 I think)
@@ -317,6 +540,9 @@ for (n in coord){
         #plot the rasterized trajectories
         traj_grid<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
         yearString <- if (length(yearList)==1) {yearList[1]} else {paste0(yearList[1],"-",yearList[length(yearList)])}
+        if ("margin" %!in% names(opt)) {
+          bb <- sp::bbox(traj_lines_df)
+        }
         plotRaster(traj_grid, main = paste0(month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                                             month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
                                             yearString, " (", h, "m AGL)"), bb = bb) #plots the raster
@@ -336,6 +562,9 @@ for (n in coord){
       
       #Plot the trajectories in a map
       setAlpha = ifelse(merged_trajlines_df$day == 28 & merged_trajlines_df$hour == 6, 1, 0.25)
+      if ("margin" %!in% names(opt)) {
+        bb <- sp::bbox(merged_trajlines_df) 
+      }
       PlotBgMap(merged_trajlines_df, xlim = bb[1, ], ylim = bb[2, ], axes = TRUE)
       plot(merged_trajlines_df,
            col = ifelse(merged_trajlines_df$start_height == 500, 
@@ -395,25 +624,25 @@ for (n in coord){
           theme(plot.title = element_text(hjust = 0.5))
         print(windrose)
         
-        # Build windrose plot for -200h
+        # Build windrose plot considering only the ending points of each trajectory
         
-        windrose = ggplot(data=merged_trajs[merged_trajs$start_height == h & merged_trajs$hour.inc == -200,], aes(x=angle, y=stat(count/sum(count)))) + 
+        windrose = ggplot(data=merged_trajs[merged_trajs$start_height == h & merged_trajs$hour.inc == duration,], aes(x=angle, y=stat(count/sum(count)))) + 
           geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill =  gsub("FF", "", color)) +
           coord_polar(start = 0, clip = "off") +
           ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                          month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                         yearString, "\n(backwards 200h, ",h, "m AGL)")) +
+                         yearString, "\n(backwards ", abs(duration),"h, ",h, "m AGL)")) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
         print(windrose)
         
-        # Build windrose plot for -100h
-        windrose = ggplot(data=merged_trajs[merged_trajs$start_height == h & merged_trajs$hour.inc == -100,], aes(x=angle, y=stat(count/sum(count)))) + 
+        # Build windrose plot considering only the points halfway through the trajectories
+        windrose = ggplot(data=merged_trajs[merged_trajs$start_height == h & merged_trajs$hour.inc == duration/2,], aes(x=angle, y=stat(count/sum(count)))) + 
           geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill =  gsub("FF", "", color)) +
           coord_polar(start = 0, clip = "off") +
           ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                          month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                         yearString, "\n(backwards 100h, ", h, "m AGL)")) +
+                         yearString, "\n(backwards ", abs(duration)/2, "h, ", h, "m AGL)")) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
         print(windrose)
@@ -433,28 +662,28 @@ for (n in coord){
         theme(plot.title = element_text(hjust = 0.5))
       print(windrose)
       
-      # Build windrose plot for -200h
+      # Build windrose plot considering only the ending points of the trajectories
       
-      windrose = ggplot(data=merged_trajs[merged_trajs$hour.inc == -200,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
+      windrose = ggplot(data=merged_trajs[merged_trajs$hour.inc == opt$duration,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
                                                fill=start_height)) + 
         geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
         coord_polar(start = 0, clip = "off") +
         ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                        month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                       yearString, " (backwards 200h)")) +
+                       yearString, " (backwards ", abs(duration), "h)")) +
         scale_fill_viridis(discrete = T, alpha = 1) +
         scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
         theme(plot.title = element_text(hjust = 0.5))
       print(windrose)
       
       # Build windrose plot for -100h
-      windrose = ggplot(data=merged_trajs[merged_trajs$hour.inc == -100,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
+      windrose = ggplot(data=merged_trajs[merged_trajs$hour.inc == opt$duration/2,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
                                                                                fill=start_height)) + 
         geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
         coord_polar(start = 0, clip = "off") +
         ggtitle(paste0("Wind directions ", month.name[i]," ", j[1], " ", times[[1]][1], " to ", 
                        month.name[i], " ", j[length(j)], " ", times[[1]][2], " ", 
-                       yearString, " (backwards 100h)")) +
+                       yearString, " (backwards ", abs(duration)/2, "h)")) +
         scale_fill_viridis(discrete = T, alpha = 1) +
         scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
         theme(plot.title = element_text(hjust = 0.5))
@@ -464,29 +693,42 @@ for (n in coord){
 }
 
 dev.off()
+if(opt$verbose){
+  if(.Platform$OS.type == "windows"){
+    cat(paste0('All trajectories computed.\r\nPlots stored in "', outfile,'".\r\nExiting program.'))
+  } else {
+    cat(paste0('All trajectories computed.\nPlots stored in "', outfile,'".\nExiting program.'))
+    }
+  }
 
+save.image(".RData")
 
+if(opt$verbose) {
+  cat("All R objects saved to .RData")
+}
+
+quit()
 
 #### Main trajectories (October 28th at 6:00am) ####
 
 traj500 <- ProcTrajMod(lat = 5.75, lon = -53.93,
                       hour.interval = 1, name = "traj", start.hour = "06:00", end.hour = "06:00",
-                      met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -200, height = 500,
-                      hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = TZ)
+                      met = paste0(hy_path, "working/"), out = paste0(hy_path, "working/Out_files/"), hours = -200, height = 500,
+                      hy.path = hy_path, dates = c("2013-10-28"), tz = TZ)
 
 traj500$start_height <- 500
 
 traj1000 <- ProcTrajMod(lat = 5.75, lon = -53.93,
                        hour.interval = 1, name = "traj", start.hour = "06:00", end.hour = "06:00",
-                       met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -200, height = 1000,
-                       hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = TZ)
+                       met = paste0(hy_path, "working/"), out = paste0(hy_path, "working/Out_files/"), hours = -200, height = 1000,
+                       hy.path = hy_path, dates = c("2013-10-28"), tz = TZ)
 
 traj1000$start_height <- 1000
 
 traj2000 <- ProcTrajMod(lat = 5.75, lon = -53.93,
                         hour.interval = 1, name = "traj", start.hour = "06:00", end.hour = "06:00",
-                        met = "C:/hysplit/working/", out = "C:/hysplit/working/Out_files/", hours = -200, height = 2000,
-                        hy.path = "C:/hysplit/", dates = c("2013-10-28"), tz = TZ)
+                        met = paste0(hy_path, "working/"), out = paste0(hy_path, "working/Out_files/"), hours = -200, height = 2000,
+                        hy.path = hy_path, dates = c("2013-10-28"), tz = TZ)
 
 traj2000$start_height <- 2000
 
@@ -495,13 +737,13 @@ MainTrajs <- rbind(traj500, traj1000, traj2000)
 
 
 # Convert to Ds2SpLines and Ds2SpLinesDf
-MainTrajlines <- Df2SpLines(MainTrajs, crs = "+proj=longlat +datum=NAD27")
+MainTrajlines <- Df2SpLines(MainTrajs, crs = PRJ)
 MainTrajlines_df <- Df2SpLinesDf(MainTrajlines, MainTrajs, add.distance = T, add.azimuth = T)
 
 
 # creating SpatialPoitns object for plotting
 pts <- cbind(MainTrajs$lon, MainTrajs$lat, MainTrajs$height)
-transformedPoints <- SpatialPoints(pts, proj4string = CRS("+proj=longlat +datum=NAD27"))
+transformedPoints <- SpatialPoints(pts, proj4string = CRS(PRJ))
 transformedPoints_df <- SpatialPointsDataFrame(transformedPoints, as.data.frame(pts))
 
 # Plot trajectories and points
@@ -521,7 +763,7 @@ thinnedPoints <- transformedPoints_df@coords[seq(10, nrow(transformedPoints_df@c
 points(thinnedPoints, 
        pch=17, col = rep(c(viridis(n=1, begin = 1), viridis(n=1, begin = 0.5), viridis(n=1, begin = 0)), times=c(20,20,20)))
 
-title(main = "Trajectories for October 28th 2013, backwards 200 hours",
+title(main = "Trajectories for October 28th 2013, backwards ", abs(duration), " hours",
       outer = T, line = -1.6)
 
 legend(bb[1,1], bb[2,2], legend = c("500m", "1000m", "2000m"), bg = "transparent",
@@ -530,7 +772,7 @@ legend(bb[1,1], bb[2,2], legend = c("500m", "1000m", "2000m"), bg = "transparent
 
 alt_plot <- ggplot(data = MainTrajs[seq(1, nrow(MainTrajs), 10),], aes(x = -1*hour.inc, y = height)) +
   geom_point(aes(color = factor(start_height)), shape = 17, size = 3) +
-  ggtitle("Trajectory altitude profile for October 28th 2013, backwards 200 hours") +
+  ggtitle("Trajectory altitude profile for October 28th 2013, backwards ", abs(duration), " hours") +
   scale_color_viridis(begin = 1, end = 0, discrete = T, alpha = 1) +
   ylab("Altitude (m AGL)") +
   xlab("Hours before observation") +
