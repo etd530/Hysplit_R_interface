@@ -1,5 +1,5 @@
-#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 01042013_00:00 --to 30112013_23:00 --dayblocks 01:10,11:20,21:31 --lat 55.088505 --lon 20.736169 --altitude 500 --duration -24 --out test_Kaliningrad.pdf --byhour 1 --verbose
-#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_DOS.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_Guyana.pdf --byhour 1 --verbose
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis.R --from 01042013_00:00 --to 30112013_23:00 --dayblocks 01:10,11:20,21:31 --lat 55.088505 --lon 20.736169 --altitude 500 --duration -24 --out test_Kaliningrad.pdf --byhour 1 --verbose
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_Guyana.pdf --byhour 1 --verbose
 
 #### HYSPLIT Program (Windows version) ####
 
