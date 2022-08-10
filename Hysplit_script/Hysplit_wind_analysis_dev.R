@@ -38,7 +38,7 @@
 # by_year_month_day_hour = c(0, 1, 1, 1)
 
 ## test 6
-#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-11-(22,25,28)-06-00 --to 2013-11-(25,28,31)-06-00 --lat 55.088505 --lon 20.736169 --altitude 500 --duration -24 --out test_Kaliningrad.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 1 --verbose
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-11-(22,25,28)-06-00 --to 2013-11-(25,28,31)-06-00 --lat 55.088505 --lon 20.736169 --altitude 500,1000 --duration -24 --out test_Kaliningrad.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 1 --verbose
 
 #### Load packages ####
 library(splitr)       # to work with Hysplit (to download files mostly)
@@ -75,10 +75,6 @@ option_list = list(
               help = "Number specifying the intervals of years from which to run trajectories",
               metavar = "integer"),
   
-  # make_option("--dayblocks", type="character", default=NULL,
-  #             help= "Blocks of days to include together in the same plot",
-  #             metavar = "character"),
-  
   make_option(c("-d", "--duration"), type = "integer", default = 1,
               help = "Duration of each trajectory calculation in hours. Start with a '-' to do backwards trajectories",
               metavar = "integer"),
@@ -98,6 +94,10 @@ option_list = list(
   
   make_option(c("-m", "--margin"), type = "character", default = NULL,
               help = "Latitude and longitude determining the area of the maps. Provide in the order: minlon, minlat, maxlon, maxlat WITHOUT SPACES",
+              metavar = "character"),
+  
+  make_option(c("--windrose_times"), type="character", default="Inf",
+              help = "Time points to use for plotting the windrose histograms, separated by commas. use 'Inf' to include all time points",
               metavar = "character"),
   
   make_option(c("-o", "--out"), type = "character", default = "windplots.pdf",
@@ -548,6 +548,120 @@ plot_raster_maps = function(trajs, height, PRJ) {
   }
 }
 
+# Function to plot the trajectories from a list
+plot_trajlines = function(trajs, PRJ){
+  # get the SpatialLines object
+  traj_lines <- Df2SpLines(trajs, crs = PRJ)
+  # Get the SpatialLinesDataFrame object
+  traj_lines_df <- Df2SpLinesDf(traj_lines, trajs, add.distance = T, add.azimuth = T)
+  
+  # Get margins for the pltos if it has not been provided by the user
+  if ("margin" %!in% names(opt)) {
+    bb <- sp::bbox(traj_lines_df) 
+  }
+  
+  # Make color palette
+  color_palette = viridis(n=length(unique(trajs$start_height)), begin=0)
+  
+  # Plot
+  PlotBgMap(traj_lines_df, xlim = bb[1, ], ylim = bb[2, ], axes = TRUE)
+  plot(traj_lines_df, col = color_palette, add = T)
+  
+  title(main = paste0(min(trajs$date), " to ", max(trajs$date)),
+        outer = T, line = -1.6)
+  
+  legend(bb[1,1], bb[2,2], legend = unique(trajs$start_height), bg = "transparent",
+         fill = color_palette, title = "Starting altitude (m AGL)")
+}
+
+# Function to plot the windrose histograms (heights separated)
+plot_windrose_hist = function(trajs, height, duration=Inf){
+  # Get starting coordinates
+  coord <- c(unique(trajs$lat[trajs$hour.inc==0]), unique(trajs$lon[trajs$hour.inc==0]))
+  
+  # Calculate distance from origin and angle relative to origin for each trajectory position
+  trajs$dist <- pointDistance(cbind(trajs$lon, trajs$lat), c(coord[2], coord[1]), lonlat = T)
+  trajs$angle <- bearing(c(coord[2], coord[1]), cbind(trajs$lon, trajs$lat))
+  
+  #take out values for the starting points, which are still at the origin so distance is zero and it makes no sense to calculate an angle
+  trajs$dist[trajs$hour.inc==0] <- NA
+  trajs$angle[trajs$hour.inc==0] <- NA
+  
+  #add 360 to negative azimuths
+  for (ang in 1:length(trajs$angle)) {
+    if (!is.na(trajs$angle[ang]) & (trajs$angle[ang] < 0)) {
+      trajs$angle[ang] <- trajs$angle[ang] + 360
+    }
+  }
+  
+  # Build windrose histograms
+  # turn starting height into factor
+  trajs$start_height <- factor(trajs$start_height, levels = unique(as.character(trajs$start_height)))
+  
+  # Create color palette
+  color = viridis(n = length(unique(trajs$start_height)), begin=0)
+  
+  # Make plot for each user-specified time point (Inf meaning include all time points of the trajectory)
+  for (d in duration) {
+    # Plots with all time points
+    if(d == Inf){
+      # Plot with all heights
+      if(length(height)>1){
+        windrose = ggplot(data=trajs, aes(x=angle, y=stat(count/sum(count)), group=start_height,
+                                          fill=start_height)) +
+          geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
+          coord_polar(start = 0, clip = "off") +
+          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), " (all time points)")) +
+          scale_fill_viridis(discrete = T, alpha = 1) +
+          scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
+          theme(plot.title = element_text(hjust = 0.5))
+        print(windrose) 
+      }
+      
+      # Plots separated by height
+      for (h in 1:length(height)){
+        windrose = ggplot(data=trajs[trajs$start_height == height[h],], aes(x=angle, y=stat(count/sum(count)))) + 
+          geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill =  color[h]) +
+          coord_polar(start = 0, clip = "off") +
+          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), "\n(all time points, ", as.character(height[h]), "m AGL)")) +
+          scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
+          theme(plot.title = element_text(hjust = 0.5))
+        print(windrose)
+      }
+    # Plots for a specific time point
+    } else if(abs(d) > max(abs(trajs$hour.inc))) {
+      print("WARNING: Provided hour for windrose histogram is larger than the duration of the runs and thus will be skipped")
+    } else {
+      # All heights
+      if (length(height)>1){
+        windrose = ggplot(data=trajs[trajs$hour.inc == d,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
+                                                                fill=start_height)) +
+          geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
+          coord_polar(start = 0, clip = "off") +
+          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), " (backwards ", abs(d), "h)")) +
+          scale_fill_viridis(discrete = T, alpha = 1) +
+          scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
+          theme(plot.title = element_text(hjust = 0.5))
+        print(windrose) 
+      }
+      
+      # Specific height
+      for (h in 1:length(height)){
+        windrose = ggplot(data=trajs[trajs$hour.inc == d & trajs$start_height == height[h],], aes(x=angle, y=stat(count/sum(count)))) +
+          geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill = color[h]) +
+          coord_polar(start = 0, clip = "off") +
+          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), " \n(backwards ", abs(d), "h, ", height[h], "m AGL)")) +
+          scale_fill_viridis(discrete = T, alpha = 1) +
+          scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
+          theme(plot.title = element_text(hjust = 0.5))
+        print(windrose)
+      }
+    }
+  }
+  return(trajs)
+}
+
+
 #### VARIABLES ####
 # path to hysplit installation
 hy_path <- "C:/hysplit/"
@@ -642,6 +756,12 @@ if("margin" %in% names(opt)) {
 }
 
 if (opt$debug) {print(bb)}
+
+# Time points to use for the windrose histograms
+windrose_times <- as.vector(as.numeric(strsplit(x = opt$windrose_times, 
+                                                 split = ",", fixed = T)[[1]]))
+
+if(opt$debug){print(windrose_points)}
 
 if(opt$debug){print("All is OK")}
 if (opt$debug){quit()}
@@ -741,19 +861,31 @@ if(opt$verbose){print("Starting trajectory calculations. Please wait...")}
 trajs <- lapply(X=blocks_list, FUN = compute_trajectories, hourInt = 1, 
        latlon = coord, h = height, duration = duration)
 
+if(opt$verbose){print("Plotting raster maps...")}
 #### Plot raster maps ####
 pdf(outfile)
 
 lapply(X=trajs, plot_raster_maps, height = height, PRJ = PRJ)
 
+
+#### Plot Trajlines####
+if(opt$verbose){print("Plotting trajectories...")}
+lapply(X=trajs, FUN = plot_trajlines, PRJ = PRJ)
+
+
+#### Plot windrose histograms ####
+if(opt$verbose){print("Plotting windrose histograms...")}
+trajs <- lapply(X = trajs, FUN = plot_windrose_hist, height = height, duration = windrose_times)
+
 dev.off()
+if(opt$verbose){print(paste0("All plots saved to ", outfile))}
 
 
 #### Save image of data ####
 save.image("dev.RData")
 
 if(opt$verbose) {
-  cat("All R objects saved to .RData")
+  cat("All R objects saved to dev.RData")
 }
 
 quit()
