@@ -877,9 +877,57 @@ lapply(X=trajs, FUN = plot_trajlines, PRJ = PRJ)
 if(opt$verbose){print("Plotting windrose histograms...")}
 trajs <- lapply(X = trajs, FUN = plot_windrose_hist, height = height, duration = windrose_times)
 
+
+#### Plot altitudinal profile plots ####
+if(opt$verbose){print("Plotting altitudinal profiles...")}
+
+plot_altitudinal_profile = function(trajs){
+  # Create dataframe to store summary statistics of the trajectories
+  mean_SE_trajs <- as.data.frame(matrix(nrow=length(unique(trajs$hour.inc))*length(unique(trajs$start_height)), ncol=4))
+  colnames(mean_SE_trajs) = c("hour.inc", "start_height","mean_height", "SE_height")
+  mean_SE_trajs$start_height <- as.factor(mean_SE_trajs$start_height)
+  levels(mean_SE_trajs$start_height) <- unique(trajs$start_height)
+  
+  # add the hours backwards or forwards that trajectories go over
+  mean_SE_trajs$hour.inc <- unique(trajs$hour.inc)
+  
+  # add the starting heights
+  for (alt in 1:length(unique(trajs$start_height))){
+    start_index = 1+(alt-1)*length(unique(trajs$hour.inc))
+    end_index = start_index + length(unique(trajs$hour.inc))-1 
+    mean_SE_trajs$start_height[start_index:end_index] <- unique(trajs$start_height)[alt]
+  }
+  
+  # for each hour and starting height, add the corresponding mean and SE
+  for (alt in unique(trajs$start_height)){
+    for (h in unique(trajs$hour.inc)){
+      output_mask <- mean_SE_trajs$hour.inc == h & mean_SE_trajs$start_height == alt
+      input_mask <- trajs$hour.inc == h & trajs$start_height == alt
+      mean_SE_trajs$mean_height[output_mask] <- mean(trajs$height[input_mask])
+      mean_SE_trajs$SE_height[output_mask] <- sd(trajs$height[input_mask])/sqrt(nrow(trajs[input_mask,]))
+    }
+  }
+  
+  # Plot altitudinal profiles
+  alt_plot <- ggplot(data = mean_SE_trajs, aes(x = -1*hour.inc, y = mean_height)) +
+    geom_point(aes(color = factor(start_height)), shape = 17, size = 3) +
+    ggtitle(paste0("Trajectory altitude profile from ", min(trajs$date), " to ", max(trajs$date), ",\nbackwards ", abs(duration), " hours")) +
+    scale_color_viridis(begin = 1, end = 0, discrete = T, alpha = 1) +
+    ylab("Altitude (m AGL)") +
+    xlab("Hours before observation") +
+    theme(plot.title = element_text(hjust = 0.5)) + labs(color = "Start height") +
+    geom_line(data = mean_SE_trajs, aes(x = -1*hour.inc, y = mean_height, group = start_height, color = factor(start_height)))
+  
+  # print(alt_plot)
+}
+
+
+lapply(X = trajs, FUN = plot_altitudinal_profile)
+
+#ggsave("Alt_plots.pdf", plot = alt_plot, width = 2000, height = 2000*0.5, units = "px")
+
 dev.off()
 if(opt$verbose){print(paste0("All plots saved to ", outfile))}
-
 
 #### Save image of data ####
 save.image("dev.RData")
