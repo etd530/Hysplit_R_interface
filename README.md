@@ -20,19 +20,21 @@ to open the code and change the first variable (line 728) so that it species the
 <a name="running"/>
 
 ## How to run the program
-The main arguments required to run a set of trajectories are `--from`, which specifies the starting date(s); `--to`, which specifies the ending date(s) and `--by_hour`, 
-`--by_day`, `--by_month` and `--by_year`, which specifies the intervals of time separating the first and last date(s) of the set. The latter four arguments take integers, 
+The main arguments required to run a set of trajectories are `--from`, which specifies the starting date(s); `--to`, which specifies the ending date(s) and `--byhour`, 
+`--byday`, `--bymonth` and `--byyear`, which specifies the intervals of time separating the first and last date(s) of the set. The latter four arguments take integers, 
 e.g. `--by_hour 1` indicates to run one trajectory per hour between the starting and ending date(s) and times(s). `--from` and `--to` take dates and hours in the format 
 `YYYY-MM-DD-hh-mm`, i.e. the year, month, day, hour and minute (in 24-hour format). In addition, the argument `--duration` indicates how long each trajectory calculation 
 should last, and whether it should go forwards or backwards in time, e.g. `--duartion -24` indicates that each trajectory is computed up to 24 hours before its starting time.
 
-A series of examples are provided below. Example 1 goes over the different types of output obtained form the program while the others focus on different combinations of days, 
-months, etc. that can be done.
+A series of examples are provided below. Example 1 goes over the different types of output obtained form the program while the others focus on different combinations of days, months, etc. that can be done.
+
+*Note: it is also possible to run a single trajectory by simply specifying the same dates and times in --from and --to.*    
+
 
 ### Example 1: Running a sequence of trajectories separated by a single unit of time
 One possible use of this program is to run a set of trajectory calculations from one point in time to another, separated regularly by a single "unit of time". For example, 
 one may wish to run trajectories at October 22nd 2013 at 06:00h, October 22nd 2013 at 07:00h, etc., until October 25th 2013 at 06:00h, 24 hours backwards, starting at 
-altitudes of 500, 1000 and 2000m AGL from coordinates (5.745974, -53.934047):
+altitudes of 500, 1000 and 2000m AGL from coordinates (5.745974, -53.934047). In such case, the arguments `--from` and ``--to` simply indicate the starting and ending times, and `--byhour 1` indicates that we want one trajectory per hour between those two time points:
 
 ```
 ./Hysplit_wind_analysis_dev.R --from 2013-10-22-06-00 --to 2013-10-25-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --byhour 1
@@ -62,3 +64,13 @@ Lastly, an "altitudinal profile" plot is provided, which indicates the mean heig
 of the run:
 
 <img src="https://user-images.githubusercontent.com/85890746/187040016-9964941a-4680-4bb7-aa86-b4655459deb8.png" width="400">  
+
+### Example 2: Running trajectories across multiple units of time
+Instead of being interested in a single, "continuous" set of trajectories, one may be interested in a set of trajectories repeated across a larger interval. For example,
+one may want to compute trajectories for all hours between 10:00 and 18:00 from days 1st to 10th of April, May and June, for years 2000 to 2022. In this case, we have a smaller sequence (from 10:00 to 18:00 by one hour) that then repeats in a larger one (from 1st to 10th day of the month, by one day), then another one (from April to June, month by month) and finally another one (from 2000 to 2002, year by year). To do this, the arguments `--from` and `--to` need to indicate, respectively, the smaller and larger element of each of the sequences, and then we indicate the step size with the arguments `byhour`, `byday`, `bymonth` and `byyear`:
+
+```
+./Hysplit_wind_analysis_dev.R --from 2000-04-01-10-00 --to 2002-06-10-18-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --byyear 1 --bymonth 1 --byday 1 --byhour 1
+```
+
+<img src="https://user-images.githubusercontent.com/85890746/187041780-a2c2ca5c-2340-4ae5-bb93-45c993bdb026.png" width="400">  
