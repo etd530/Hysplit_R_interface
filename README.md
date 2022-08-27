@@ -48,6 +48,9 @@ cell. These are provided for each starting height separately:
 <img src="https://user-images.githubusercontent.com/85890746/187039171-40acd992-a090-4a3c-a330-0f959a3404c7.png" width="250">
 <img src="https://user-images.githubusercontent.com/85890746/187039272-35ac67a0-77c7-4176-936b-491a2b73b5e1.png" width="250">
 
+
 Secondly, a map with all trajectories plotted is also provided:
 
 <img src="https://user-images.githubusercontent.com/85890746/187039560-e0bc7bcc-7aec-413a-be70-3310803f81e3.png" width="350">
+
+
