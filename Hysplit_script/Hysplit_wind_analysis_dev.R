@@ -7,39 +7,38 @@
 #################### Testing version for the new date parsing ###################
 
 # TESTS
-# test 1
-# from = "2000-04-01-00-00"
-# to = "2020-06-10-23-00"
-# 
-# by_year_month_day_hour = c(1, 1, 1, 1)
+# test 0: single trajectory at October 28th 2013, 06:00, for 3 different heights, 200 hours backwards
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-10-28-06-00 --to 2013-10-28-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_0.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 0 --verbose --windrose_times '-100,-200,Inf'
 
-#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2000-04-01-00-00 --to 2020-06-10-23-00 --lat 55.088505 --lon 20.736169 --altitude 500 --duration -24 --out test_1.pdf --byyear 1 --bymonth 1 --byday 1 --byhour 1 --verbose
+# test 1: trajectories from 100:00 to 18:00, for days 1 to 10 of april, may and june, of years 2000 to 2002
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2000-04-01-10-00 --to 2002-06-10-18-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --out test_1.pdf --byyear 1 --bymonth 1 --byday 1 --byhour 1 --verbose
 
-## test 2
+## test 2: trajectories from October 22nd 2013 at 06:00 to October 25th 2013 at 06:00, one per hour, backwards 24 hours each
 # from = "2013-10-22-06-00"
 # to = "2013-10-25-06-00"
 # 
 # by_year_month_day_hour = c(0, 0, 0, 1)
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-10-22-06-00 --to 2013-10-25-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --out test_2.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 1 --verbose
 
-## test 3
+## test 3: from the 22nd at 6:00 to the 25th at 06:00 hour by hour, of all months October 2013 to October 2015
 # from = "2013-10-22-06-00"
 # to = "2015-10-25-06-00"
 # 
 # by_year_month_day_hour = c(1, 0, 0, 1)
 
-## test 4
+## test 4: For all months from May 2013 to May 2015, run for days 22nd to 25th, trajectories at hours 00:00 to 01:00
 # from = "2013-05-22-00-00"
 # to = "2015-05-25-01-00"
 # 
 # by_year_month_day_hour = c(0, 1, 1, 1)
 
-## test 5
+## test 5: Same as test 4, but ending month is smaller than starting month
 # from = "2013-05-22-00-00"
 # to = "2015-04-25-01-00"
 # 
 # by_year_month_day_hour = c(0, 1, 1, 1)
 
-## test 6
+## test 6: same as test 2, but more hours
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-10-22-06-00 --to 2013-10-25-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_6.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 1 --verbose --windrose_times '-100,-200,Inf'
 
 #### Load packages ####
@@ -923,11 +922,19 @@ if(opt$verbose){print("Starting trajectory calculations. Please wait...")}
 trajs <- lapply(X=blocks_list, FUN = compute_trajectories, hourInt = 1, 
        latlon = coord, h = height, duration = duration)
 
-if(opt$verbose){print("Plotting raster maps...")}
 #### Plot raster maps ####
+if(opt$verbose){print("Plotting raster maps...")}
 pdf(outfile)
 
-lapply(X=trajs, plot_raster_maps, height = height, PRJ = PRJ)
+print(length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0 &
+                                   trajs[[1]]$start_height == unique(trajs[[1]]$start_height)[1]]))
+
+if (length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0&
+                               trajs[[1]]$start_height == unique(trajs[[1]]$start_height)[1]])>1){
+  lapply(X=trajs, plot_raster_maps, height = height, PRJ = PRJ)
+} else if (opt$verbose){
+  print("WARNING: No raster maps will be generated as only one trajectory per height is being run")
+}
 
 
 #### Plot Trajlines####
@@ -949,10 +956,10 @@ dev.off()
 if(opt$verbose){print(paste0("All plots saved to ", outfile))}
 
 #### Save image of data ####
-save.image("dev.RData")
+save.image(paste0(outfile,".RData"))
 
 if(opt$verbose) {
-  cat("All R objects saved to dev.RData")
+  cat(paste0("All R objects saved to ", outfile,".RData"))
 }
 
 quit()
