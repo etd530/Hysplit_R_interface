@@ -6,12 +6,14 @@
 #### HYSPLIT Program ####
 #################### Testing version for the new date parsing ###################
 
-# Fake initial arguments
+# TESTS
 # test 1
 # from = "2000-04-01-00-00"
 # to = "2020-06-10-23-00"
 # 
 # by_year_month_day_hour = c(1, 1, 1, 1)
+
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2000-04-01-00-00 --to 2020-06-10-23-00 --lat 55.088505 --lon 20.736169 --altitude 500 --duration -24 --out test_1.pdf --byyear 1 --bymonth 1 --byday 1 --byhour 1 --verbose
 
 ## test 2
 # from = "2013-10-22-06-00"
@@ -38,7 +40,7 @@
 # by_year_month_day_hour = c(0, 1, 1, 1)
 
 ## test 6
-#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-11-(22,25,28)-06-00 --to 2013-11-(25,28,31)-06-00 --lat 55.088505 --lon 20.736169 --altitude 500,1000 --duration -24 --out test_Kaliningrad.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 1 --verbose
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-10-22-06-00 --to 2013-10-25-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_6.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 1 --verbose --windrose_times '-100,-200,Inf'
 
 #### Load packages ####
 library(splitr)       # to work with Hysplit (to download files mostly)
@@ -122,10 +124,10 @@ if (opt$debug) {
   for (i in c(1:length(names(opt)))) {
     print(opt[i])
   }
-  # print(names(opt))
-  # for (i in opt) {
-  #   print(i)
-  # }
+  print(names(opt))
+  for (i in opt) {
+    print(i)
+  }
 }
 
 #### OPERATORS ####
@@ -561,7 +563,12 @@ plot_trajlines = function(trajs, PRJ){
   }
   
   # Make color palette
-  color_palette = viridis(n=length(unique(trajs$start_height)), begin=0)
+  color_list = viridis(n=length(unique(trajs$start_height)), begin=0, alpha = 0.25)
+  names(color_list) = unique(trajs$start_height)
+  color_palette <- vector()
+  for (traj_height in traj_lines_df$start_height){
+    color_palette[length(color_palette)+1] <- color_list[which(names(color_list) == as.character(traj_height))]
+  }
   
   # Plot
   PlotBgMap(traj_lines_df, xlim = bb[1, ], ylim = bb[2, ], axes = TRUE)
@@ -571,7 +578,7 @@ plot_trajlines = function(trajs, PRJ){
         outer = T, line = -1.6)
   
   legend(bb[1,1], bb[2,2], legend = unique(trajs$start_height), bg = "transparent",
-         fill = color_palette, title = "Starting altitude (m AGL)")
+         fill = color_list, title = "Starting altitude (m AGL)")
 }
 
 # Function to plot the windrose histograms (heights separated)
@@ -596,7 +603,7 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
   
   # Build windrose histograms
   # turn starting height into factor
-  trajs$start_height <- factor(trajs$start_height, levels = unique(as.character(trajs$start_height)))
+  trajs$start_height <- factor(trajs$start_height, levels = unique(as.character(sort(trajs$start_height, decreasing = T))))
   
   # Create color palette
   color = viridis(n = length(unique(trajs$start_height)), begin=0)
@@ -695,7 +702,7 @@ plot_altitudinal_profile = function(trajs){
   
   # Plot altitudinal profiles
   alt_plot <- ggplot(data = mean_SE_trajs, aes(x = -1*hour.inc, y = mean_height)) +
-    geom_point(aes(color = factor(start_height)), shape = 17, size = 3) +
+    #geom_point(aes(color = factor(start_height)), shape = 17, size = 3) +
     ggtitle(paste0("Trajectory altitude profile from ", min(trajs$date), "\nto ", max(trajs$date), ", backwards ", abs(duration), " hours")) +
     scale_color_viridis(begin = 1, end = 0, discrete = T, alpha = 1) +
     scale_fill_viridis(begin = 1, end = 0, discrete = T, alpha = 0.25) + 
@@ -806,18 +813,17 @@ if("margin" %in% names(opt)) {
   bb <- as.matrix(cbind(c(opt$margin[1], opt$margin[2]), c(opt$margin[3], opt$margin[4]))) #limits of the map for the plots
   colnames(bb) <- c("min", "max")
   rownames(bb) <- c("x", "y")
+  if (opt$debug) {print(bb)}
 } else if (opt$verbose) {
   print("No user-defined margins for maps. They will be determined by default")
   # bb <- as.matrix(cbind(c(round(opt$lon - 40), round(opt$lat - 40)), c(round(opt$lon + 40), round(opt$lat + 40))))
 }
 
-if (opt$debug) {print(bb)}
-
 # Time points to use for the windrose histograms
-windrose_times <- as.vector(as.numeric(strsplit(x = opt$windrose_times, 
+windrose_times <- as.vector(as.numeric(strsplit(x = gsub(pattern = "'", replacement = "", x = opt$windrose_times), 
                                                  split = ",", fixed = T)[[1]]))
 
-if(opt$debug){print(windrose_points)}
+if(opt$debug){print(windrose_times)}
 
 if(opt$debug){print("All is OK")}
 if (opt$debug){quit()}
