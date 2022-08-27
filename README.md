@@ -2,7 +2,9 @@
 
 #### Table of contents
 [Installation](#installation)  
-[How to run the program](#running)
+[How to run the program](#running)  
+[Troubleshooting](#troubleshooting)  
+
 
 This code contains an R program that calls [HYSPLIT](https://www.arl.noaa.gov/hysplit/) trajectory model to obtain wind trajectories, allowing to automate the 
 calculation of large numbers of trajectories, and produces different types of plots summarizing the results of the different runs.
@@ -74,3 +76,11 @@ one may want to compute trajectories for all hours between 10:00 and 18:00 from 
 ```
 
 <img src="https://user-images.githubusercontent.com/85890746/187041780-a2c2ca5c-2340-4ae5-bb93-45c993bdb026.png" width="400">  
+
+<a name="troubleshooting"/>
+
+## Troubleshooting  
+### Meteorological files not downloading properly  
+When a run will require meteorological files that need to be downloaded, there is a chance that if the Internet connection is not working properly the file download will halt, and the program will exit with an error.  
+
+If this happens, one needs to go to the HYSPLIT installation folder, enter the `working` folder and remove the incomplete meterological file. These files are identified by the `.gbl` extension and are named starting with RP and then indicating the year and the month. If the file is not removed, HYSPLIT will think it already has the it and try to compute the trajectories, but then it will give an error, as some data will be missing.
