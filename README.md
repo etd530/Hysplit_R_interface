@@ -11,7 +11,7 @@ calculation of large numbers of trajectories, and produces different types of pl
 
 ## Installation
 Although the program itself does not require installation *per se*, you will need to have a local installation of [HYSPLIT](https://www.ready.noaa.gov/HYSPLIT.php) 
-in order to use it. In addition, there are a number of R depenencies that will be required and, to ensure compatibility it is recommended to use R 4.1.2.
+in order to use it. In addition, there are a number of R depenencies that will be required and, to ensure compatibility **it is recommended to use R 4.1.2**.
 
 Therefore, it is recommended to first **install R 4.1.2 and HYSPLIT**. Then, **clone this repository** using `git` and open the R Project. The R `renv` package will
 automatically install itself. After it has finished, all other dependencies can be installed by **running `renv::restore()` in the R console**. Lastly, you will need 
@@ -58,3 +58,7 @@ The next output are circular histogram, indicating the proportion of trajectorie
 
 <img src="https://user-images.githubusercontent.com/85890746/187039811-fa26baaf-0122-4e5e-8663-427afe428146.png" width="400">  
 
+Lastly, an "altitudinal profile" plot is provided, which indicates the mean height (± standard error) of each group of trajectories at the different hours of the duration
+of the run:
+
+<img src="https://user-images.githubusercontent.com/85890746/187040016-9964941a-4680-4bb7-aa86-b4655459deb8.png" width="400">  
