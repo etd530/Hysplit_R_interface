@@ -1,4 +1,4 @@
-# HYSPLIT R Interface for large-scale trajectory computing
+# R interface to HYSPLIT for scalable trajectory computing
 
 #### Table of contents
 [Installation](#installation)  
