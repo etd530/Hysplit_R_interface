@@ -44,6 +44,6 @@ Luckily once they are downloaded, running any trajectories involving these files
 Afterwards the program will compute all trajectories and then produce the first plot, which are rasterized trajectory plots containing the trajectory density at each raster
 cell. These are provided for each starting height separately:
 
-<img src="https://user-images.githubusercontent.com/85890746/187038873-953ff429-9e78-42f5-825e-c6d54cabcd7a.png" width="220">
-<img src="https://user-images.githubusercontent.com/85890746/187039171-40acd992-a090-4a3c-a330-0f959a3404c7.png" width="220">
-<img src="https://user-images.githubusercontent.com/85890746/187039272-35ac67a0-77c7-4176-936b-491a2b73b5e1.png" width="220">
+<img src="https://user-images.githubusercontent.com/85890746/187038873-953ff429-9e78-42f5-825e-c6d54cabcd7a.png" width="250">
+<img src="https://user-images.githubusercontent.com/85890746/187039171-40acd992-a090-4a3c-a330-0f959a3404c7.png" width="250">
+<img src="https://user-images.githubusercontent.com/85890746/187039272-35ac67a0-77c7-4176-936b-491a2b73b5e1.png" width="250">
