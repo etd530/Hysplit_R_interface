@@ -56,10 +56,10 @@ library(optparse)     # Nice argument parsing
 #### ARGS ####
 option_list = list(
   make_option(c("-f", "--from"), type="character", default=NULL,
-              help="Starting date and time for the Hysplit runs. Provide in ddmmyyyy_hh:mm format, with hours in 24-hour format", metavar="character"),
+              help="Starting date and time for the Hysplit runs. Provide in YYYY-MM-DD-hh-mm format, with hours in 24-hour format", metavar="character"),
   
   make_option(c("-t", "--to"), type="character", default=NULL,
-              help="Ending date and time for the Hysplit runs. Provide in ddmmyyyy_hh:mm format, with hours in 24-hour format", metavar="character"),
+              help="Ending date and time for the Hysplit runs. Provide in YYYY-MM-DD-hh-mm format, with hours in 24-hour format", metavar="character"),
   
   make_option("--byhour", type = "integer", default=0,
               help="Hour interval separating different trajectories", metavar = "integer"),
