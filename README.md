@@ -36,7 +36,7 @@ A series of examples are provided below. Example 1 goes over the different types
 ### Example 1: Running a sequence of trajectories separated by a single unit of time
 One possible use of this program is to run a set of trajectory calculations from one point in time to another, separated regularly by a single "unit of time". For example, 
 one may wish to run trajectories at October 22nd 2013 at 06:00h, October 22nd 2013 at 07:00h, etc., until October 25th 2013 at 06:00h, 24 hours backwards, starting at 
-altitudes of 500, 1000 and 2000m AGL from coordinates (5.745974, -53.934047). In such case, the arguments `--from` and ``--to` simply indicate the starting and ending times, and `--byhour 1` indicates that we want one trajectory per hour between those two time points:
+altitudes of 500, 1000 and 2000m AGL from coordinates (5.745974, -53.934047). In such case, the arguments `--from` and `--to` simply indicate the starting and ending times, and `--byhour 1` indicates that we want one trajectory per hour between those two time points:
 
 ```
 ./Hysplit_wind_analysis_dev.R --from 2013-10-22-06-00 --to 2013-10-25-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --byhour 1
