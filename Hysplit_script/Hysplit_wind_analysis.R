@@ -662,7 +662,7 @@ plot_altitudinal_profile = function(trajs){
   mean_SE_trajs$mean_minus_SE <- mean_SE_trajs$mean_height - mean_SE_trajs$SE_height
   
   # Plot altitudinal profiles
-  alt_plot <- ggplot(data = mean_SE_trajs, aes(x = -1*hour.inc, y = mean_height)) +
+  alt_plot <- ggplot(data = mean_SE_trajs, aes(x = abs(hour.inc), y = mean_height)) +
     #geom_point(aes(color = factor(start_height)), shape = 17, size = 3) +
     ggtitle(paste0("Trajectory altitude profile from ", min(trajs$date), "\nto ", max(trajs$date), ", backwards ", abs(duration), " hours")) +
     scale_color_viridis(begin = 1, end = 0, discrete = T, alpha = 1) +
@@ -670,13 +670,13 @@ plot_altitudinal_profile = function(trajs){
     ylab("Altitude (m AGL)") +
     xlab("Hours before observation") +
     theme(plot.title = element_text(hjust = 0.5)) + labs(color = "Start height") +
-    geom_line(data = mean_SE_trajs, aes(x = -1*hour.inc, y = mean_height, 
+    geom_line(data = mean_SE_trajs, aes(x = abs(hour.inc), y = mean_height, 
                                         group = start_height, 
                                         color = factor(start_height))) +
-    geom_line(data = mean_SE_trajs, aes(x = -1*hour.inc, y = mean_plus_SE, 
+    geom_line(data = mean_SE_trajs, aes(x = abs(hour.inc), y = mean_plus_SE, 
                                         group = start_height, 
                                         color = factor(start_height))) +
-    geom_line(data = mean_SE_trajs, aes(x = -1*hour.inc, y = mean_minus_SE, 
+    geom_line(data = mean_SE_trajs, aes(x = abs(hour.inc), y = mean_minus_SE, 
                                         group = start_height, 
                                         color = factor(start_height))) +
     geom_ribbon(aes(ymin = mean_minus_SE, ymax = mean_plus_SE, 
