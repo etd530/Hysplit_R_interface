@@ -10,7 +10,10 @@
 # test 0: single trajectory at October 28th 2013, 06:00, for 3 different heights, 200 hours backwards
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-10-28-06-00 --to 2013-10-28-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_0.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 0 --verbose --windrose_times '-100,-200,Inf'
 
-# test 1: trajectories from 100:00 to 18:00, for days 1 to 10 of april, may and june, of years 2000 to 2002
+# test 0b: recover results from test 0 with the.RData
+#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-10-28-06-00 --to 2013-10-28-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_0_rescued.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 0 --verbose --windrose_times '-100,-200,Inf' --rescue test_0.pdf.RData
+
+# test 1: trajectories from 10:00 to 18:00, for days 1 to 10 of april, may and june, of years 2000 to 2002
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2000-04-01-10-00 --to 2002-06-10-18-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --out test_1.pdf --byyear 1 --bymonth 1 --byday 1 --byhour 1 --verbose
 
 ## test 2: trajectories from October 22nd 2013 at 06:00 to October 25th 2013 at 06:00, one per hour, backwards 24 hours each
@@ -111,7 +114,11 @@ option_list = list(
   
   make_option(c("-D", "--debug"), type = "logical", default = FALSE, action = "store_true",
               help = "Messages for debugging. Only useulf for development",
-              metavar = "boolean")
+              metavar = "boolean"),
+  
+  make_option(c("-r", "--rescue"), type = "character", default = NULL, action = "store_true",
+              help = "Rescue previous calculation from the specified .RData file",
+              metavar = "character")
 )
 
 opt_parser = OptionParser(option_list=option_list)
@@ -172,6 +179,11 @@ if ("altitude" %!in% names(opt)) {
 }
 
 
+#### Rescue previous results if needed ####
+if("rescue" %in% names(opt)){
+  if(opt$verbose){print(paste0("Rescuing previous results from ", opt$rescue))}
+  load(opt$rescue)
+}
 #### FUNS ####
 # Function to get list of dates like the one given as input but +-X months
 get_prev_post_dates = function(datesList, increment) {
@@ -508,11 +520,20 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
   return(merged_trajs)
 }
 
-# Function to plot raster maps from Hysplit runs in a list
-plot_raster_maps = function(trajs, height, PRJ) {
+# Function to rasterize the trajectories
+rasterize_trajectories = function(trajs, height, PRJ){
+  traj_grids <- list()
   for (h in height) {
     # Subset to a single height
     single_height_trajs <- trajs[trajs$start_height == h,]
+    # If there is only one trajectory, print warning and skip iteration
+    if (nrow(single_height_trajs[single_height_trajs$hour.inc==0,]) <= 1) {
+      print(paste0("WARNING: No raster maps will be generated since there is only one trajectory calculated for ", 
+                   unique(trajs$date),
+                   " and height ",
+                   h))
+      next
+    }
     # Get the SpatialLines objects
     traj_lines <- Df2SpLines(single_height_trajs, crs = PRJ)
     # Get the SpatialLinesDataFrame object
@@ -530,7 +551,7 @@ plot_raster_maps = function(trajs, height, PRJ) {
     breaks<-seq(0, max.val, max.val/10)   #this will set the scale of the plot
     
     #Get SpatialGridDataFrame object
-    traj_grid<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
+    traj_grids[[length(traj_grids)+1]]<-as(traj_freq, "SpatialGridDataFrame")  #creates object of the necessary type for the package
     
     # yearString <- if (length(unique(single_height_trajs$year))==1) {
     #   as.character(single_height_trajs$year[1])
@@ -538,14 +559,21 @@ plot_raster_maps = function(trajs, height, PRJ) {
     #     paste0(as.character(min(unique(single_height_trajs$year))),"-",
     #            as.character(max(unique(single_height_trajs$year))))
     #   }
-    
+  }
+  return(traj_grids)
+}
+
+# Function to plot raster maps from Hysplit runs in a list
+plot_raster_maps = function(traj_grids, trajs, height) {
+  for (n in 1:length(height)) {
     # Get margins for the plots if it has not been provided by the user
     if ("margin" %!in% names(opt)) {
-      bb <- sp::bbox(traj_lines_df)
+      bb <- sp::bbox(traj_grids[[n]]) #note: before this used traj_lines_df instead of traj_grids[[n]]
     }
-    
     # Plot the raster maps
-    plotRaster(traj_grid, main = paste0(min(single_height_trajs$date)," to ", max(single_height_trajs$date)," (", h, "m AGL)"), bb = bb)
+    plotRaster(traj_grids[[n]],
+               main = paste0(min(trajs$date)," to ", max(trajs$date)," (", height[n], "m AGL)"), bb = bb)
+    # note, before this used min(single_height_trajs$date)
   }
 }
 
@@ -638,13 +666,19 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
     } else if(abs(d) > max(abs(trajs$hour.inc))) {
       print("WARNING: Provided hour for windrose histogram is larger than the duration of the runs and thus will be skipped")
     } else {
+      # check if trajectories are backwards or forwards to make plot titles accordingly
+      if(d < 0){
+        direction <- "backwards"
+      } else {
+        direction <- "forwards"
+      }
       # All heights
       if (length(height)>1){
         windrose = ggplot(data=trajs[trajs$hour.inc == d,], aes(x=angle, y=stat(count/sum(count)), group=start_height,
                                                                 fill=start_height)) +
           geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
           coord_polar(start = 0, clip = "off") +
-          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), " (backwards ", abs(d), "h)")) +
+          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), " (", direction, " ", abs(d), "h)")) +
           scale_fill_viridis(discrete = T, alpha = 1) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
@@ -656,7 +690,7 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
         windrose = ggplot(data=trajs[trajs$hour.inc == d & trajs$start_height == height[h],], aes(x=angle, y=stat(count/sum(count)))) +
           geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill = color[h]) +
           coord_polar(start = 0, clip = "off") +
-          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), " \n(backwards ", abs(d), "h, ", height[h], "m AGL)")) +
+          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), " \n(", direction, " ", abs(d), "h, ", height[h], "m AGL)")) +
           scale_fill_viridis(discrete = T, alpha = 1) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
@@ -699,22 +733,29 @@ plot_altitudinal_profile = function(trajs){
   mean_SE_trajs$mean_plus_SE <- mean_SE_trajs$mean_height + mean_SE_trajs$SE_height
   mean_SE_trajs$mean_minus_SE <- mean_SE_trajs$mean_height - mean_SE_trajs$SE_height
   
+  # check if trajectories are backwards or forwards to make plot titles accordingly
+  if(duration<0){
+    direction <- "backwards"
+  } else {
+    direction <- "forwards"
+  }
+  
   # Plot altitudinal profiles
-  alt_plot <- ggplot(data = mean_SE_trajs, aes(x = -1*hour.inc, y = mean_height)) +
+  alt_plot <- ggplot(data = mean_SE_trajs, aes(x = abs(hour.inc), y = mean_height)) +
     #geom_point(aes(color = factor(start_height)), shape = 17, size = 3) +
-    ggtitle(paste0("Trajectory altitude profile from ", min(trajs$date), "\nto ", max(trajs$date), ", backwards ", abs(duration), " hours")) +
+    ggtitle(paste0("Trajectory altitude profile from ", min(trajs$date), "\nto ", max(trajs$date), ", ", direction, " ", abs(duration), " hours")) +
     scale_color_viridis(begin = 1, end = 0, discrete = T, alpha = 1) +
     scale_fill_viridis(begin = 1, end = 0, discrete = T, alpha = 0.25) + 
     ylab("Altitude (m AGL)") +
     xlab("Hours before observation") +
     theme(plot.title = element_text(hjust = 0.5)) + labs(color = "Start height") +
-    geom_line(data = mean_SE_trajs, aes(x = -1*hour.inc, y = mean_height, 
+    geom_line(data = mean_SE_trajs, aes(x = abs(hour.inc), y = mean_height, 
                                         group = start_height, 
                                         color = factor(start_height))) +
-    geom_line(data = mean_SE_trajs, aes(x = -1*hour.inc, y = mean_plus_SE, 
+    geom_line(data = mean_SE_trajs, aes(x = abs(hour.inc), y = mean_plus_SE, 
                                         group = start_height, 
                                         color = factor(start_height))) +
-    geom_line(data = mean_SE_trajs, aes(x = -1*hour.inc, y = mean_minus_SE, 
+    geom_line(data = mean_SE_trajs, aes(x = abs(hour.inc), y = mean_minus_SE, 
                                         group = start_height, 
                                         color = factor(start_height))) +
     geom_ribbon(aes(ymin = mean_minus_SE, ymax = mean_plus_SE, 
@@ -722,6 +763,28 @@ plot_altitudinal_profile = function(trajs){
                     alpha = 0.5)) +
     xlim(0, max(abs(duration)))
 }
+
+# Modified version of AddMetFiles from opentraj (not used right now)
+AddMetFilesMod = function (month, Year, met, script.file, control.file) 
+{
+  if (month == 0) {
+    month <- 12
+    Year <- as.numeric(Year) - 1
+  }
+  if (month < 10) {
+    month <- paste("0", month, sep = "")
+  }
+  if (file.exists(paste0("../RP", Year, month, ".gbl"))){
+    line <- paste("echo", met, ">>", control.file, sep = " ")
+    cat(line, file = script.file, sep = "\n")
+    line <- paste("echo RP", Year, month, ".gbl >> ", control.file, 
+                  sep = "")
+    cat(line, file = script.file, sep = "\n")
+  } else {
+    print(paste0("WARNING: meteorological file RP", Year, month, ".gbl is not available, make sure your trajectories do not pass from one month to another!"))
+  }
+}
+
 
 
 #### VARIABLES ####
@@ -894,33 +957,40 @@ blocks_list <- lapply(X = blocks_list, FUN = rejoin_dates, TZ="UCT")
 blocks_list <- lapply(X = blocks_list, FUN = remove_missing_dates)
 
 
+#### Download files and do calculations if not recovering previous results ####
+if ("rescue" %!in% names(opt)){
+  #### Download meteorological files ####
+  # Generate list with the dates of the previous month
+  prevDates <- lapply(X = blocks_list, FUN = get_prev_post_dates, increment = -1)
+  
+  # Get meteorological files:
+  if (opt$verbose){print("Downloading necessary meteorological files...")}
+  try(lapply(X = prevDates, FUN = get_met_files))
+  
+  
+  # Generate list with dates of next month
+  postDates <- lapply(X = blocks_list, FUN = get_prev_post_dates, increment = 1)
+  
+  # Get the files; as before the loop should save time
+  try(lapply(X = postDates, FUN = get_met_files))
+  
+  
+  # Get the files for the dates of interest; since the files are by month it does not matter here if the list has more days than needed, it will skip files already downloaded
+  try(lapply(X = blocks_list, FUN = get_met_files))
+  
+  if(opt$verbose){print("All files successfully downloaded.")}
 
-#### Download meteorological files ####
-# Generate list with the dates of the previous month
-prevDates <- lapply(X = blocks_list, FUN = get_prev_post_dates, increment = -1)
 
-# Get meteorological files:
-if (opt$verbose){print("Downloading necessary meteorological files...")}
-lapply(X = prevDates, FUN = get_met_files)
-
-
-# Generate list with dates of next month
-postDates <- lapply(X = blocks_list, FUN = get_prev_post_dates, increment = 1)
-
-# Get the files; as before the loop should save time
-lapply(X = postDates, FUN = get_met_files)
-
-
-# Get the files for the dates of interest; since the files are by month it does not matter here if the list has more days than needed, it will skip files already downloaded
-lapply(X = blocks_list, FUN = get_met_files)
-
-if(opt$verbose){print("All files successfully downloaded.")}
-
-#### Calculate trajectories ####
-if(opt$verbose){print("Starting trajectory calculations. Please wait...")}
-
-trajs <- lapply(X=blocks_list, FUN = compute_trajectories, hourInt = 1, 
-       latlon = coord, h = height, duration = duration)
+  #### Calculate trajectories ####
+  if(opt$verbose){print("Starting trajectory calculations. Please wait...")}
+  
+  trajs <- lapply(X=blocks_list, FUN = compute_trajectories, hourInt = 1, 
+                  latlon = coord, h = height, duration = duration)
+  
+  #### Rasterize trajectories ####
+  if(opt$verbose){print("Rasterizing trajectories...")}
+  traj_grids <- lapply(X=trajs, rasterize_trajectories, height = height, PRJ = PRJ)
+}
 
 #### Plot raster maps ####
 if(opt$verbose){print("Plotting raster maps...")}
@@ -931,7 +1001,11 @@ print(length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0 &
 
 if (length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0&
                                trajs[[1]]$start_height == unique(trajs[[1]]$start_height)[1]])>1){
-  lapply(X=trajs, plot_raster_maps, height = height, PRJ = PRJ)
+  # lapply(X=traj_grids, FUN = plot_raster_maps, trajs = trajs, height = height)
+  mapply(FUN = plot_raster_maps, 
+         traj_grids = traj_grids, 
+         trajs = trajs, 
+         MoreArgs =  list(height = height))
 } else if (opt$verbose){
   print("WARNING: No raster maps will be generated as only one trajectory per height is being run")
 }
@@ -955,11 +1029,12 @@ lapply(X = trajs, FUN = plot_altitudinal_profile)
 dev.off()
 if(opt$verbose){print(paste0("All plots saved to ", outfile))}
 
-#### Save image of data ####
-save.image(paste0(outfile,".RData"))
-
-if(opt$verbose) {
-  cat(paste0("All R objects saved to ", outfile,".RData"))
+#### Save image of data (only ir not rescuing previous RData)####
+if("rescue" %!in% names(opt)){
+  if(opt$verbose) {
+    cat(paste0("All R objects saved to ", outfile,".RData"))
+  }
+  rm(opt) # this is needed, otherwise when rescuing RData all flags will be overwritten by the previous ones and plots won't change
+  save.image(paste0(outfile,".RData"))
 }
-
 quit()
