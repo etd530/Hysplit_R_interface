@@ -49,7 +49,7 @@ library(splitr)       # to work with Hysplit (to download files mostly)
 library(opentraj)     # to work with Hysplit (does the calculations and plotting)
 library(lubridate)    # for parsing dates
 library(ggplot2)      # plotting library
-library(raster)       # needed for the lines that change the raster values, from maxValue until setValues, and for pointDistnace()
+library(raster)       # needed for the lines that change the raster values, from maxValue until setValues, and for pointDistance()
 library(geosphere)    # needed for bearing()
 library(viridis)      # colorblind-friendly color palettes
 library(plyr)         # diverse useful functions
@@ -118,7 +118,11 @@ option_list = list(
   
   make_option(c("-r", "--rescue"), type = "character", default = NULL, action = "store_true",
               help = "Rescue previous calculation from the specified .RData file",
-              metavar = "character")
+              metavar = "character"),
+  
+  make_option(c("-R", "--resolution"), type = "integer", default = 10000,
+              help = "Resolution to use to make the raster maps",
+              metavar = "integer")
 )
 
 opt_parser = OptionParser(option_list=option_list)
@@ -521,7 +525,7 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
 }
 
 # Function to rasterize the trajectories
-rasterize_trajectories = function(trajs, height, PRJ){
+rasterize_trajectories = function(trajs, height, PRJ, resolution){
   traj_grids <- list()
   for (h in height) {
     # Subset to a single height
@@ -538,8 +542,14 @@ rasterize_trajectories = function(trajs, height, PRJ){
     traj_lines <- Df2SpLines(single_height_trajs, crs = PRJ)
     # Get the SpatialLinesDataFrame object
     traj_lines_df <- Df2SpLinesDf(traj_lines, single_height_trajs, add.distance = T, add.azimuth = T)
+    # Check that there are enough trajectories for parallelization to work
+    if (parallel::detectCores() > nrow(single_height_trajs[single_height_trajs$hour.inc==0,])){
+      parallelize = FALSE
+    } else {
+      parallelize = TRUE
+    }
     # Get the raster
-    traj_freq<- RasterizeTraj(traj_lines, parallel = T)
+    traj_freq<- RasterizeTraj(traj_lines, parallel = parallelize, resolution = resolution)
     
     # Change the absolute number of trajectories to relative number (i.e. from 0 to 1)
     max.val <- maxValue(traj_freq)        #gets the max value of the raster
@@ -565,6 +575,10 @@ rasterize_trajectories = function(trajs, height, PRJ){
 
 # Function to plot raster maps from Hysplit runs in a list
 plot_raster_maps = function(traj_grids, trajs, height) {
+  # Get starting and ending dates
+  minDate <- min(as_datetime(trajs$date[trajs$hour.inc==0]))
+  maxDate <- max(as_datetime(trajs$date[trajs$hour.inc==0]))
+  
   for (n in 1:length(height)) {
     # Get margins for the plots if it has not been provided by the user
     if ("margin" %!in% names(opt)) {
@@ -572,7 +586,7 @@ plot_raster_maps = function(traj_grids, trajs, height) {
     }
     # Plot the raster maps
     plotRaster(traj_grids[[n]],
-               main = paste0(min(trajs$date)," to ", max(trajs$date)," (", height[n], "m AGL)"), bb = bb)
+               main = paste0(minDate," to ", maxDate," (", height[n], "m AGL)"), bb = bb)
     # note, before this used min(single_height_trajs$date)
   }
 }
@@ -601,7 +615,7 @@ plot_trajlines = function(trajs, PRJ){
   PlotBgMap(traj_lines_df, xlim = bb[1, ], ylim = bb[2, ], axes = TRUE)
   plot(traj_lines_df, col = color_palette, add = T)
   
-  title(main = paste0(min(trajs$date), " to ", max(trajs$date)),
+  title(main = paste0(min(as_datetime(trajs$date[trajs$hour.inc==0])), " to ", max(as_datetime(trajs$date[trajs$hour.inc==0]))),
         outer = T, line = -1.6)
   
   legend(bb[1,1], bb[2,2], legend = unique(trajs$start_height), bg = "transparent",
@@ -635,6 +649,10 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
   # Create color palette
   color = viridis(n = length(unique(trajs$start_height)), begin=0)
   
+  # Get starting and ending dates
+  minDate <- min(as_datetime(trajs$date[trajs$hour.inc==0]))
+  maxDate <- max(as_datetime(trajs$date[trajs$hour.inc==0]))
+  
   # Make plot for each user-specified time point (Inf meaning include all time points of the trajectory)
   for (d in duration) {
     # Plots with all time points
@@ -645,7 +663,7 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
                                           fill=start_height)) +
           geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
           coord_polar(start = 0, clip = "off") +
-          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), " (all time points)")) +
+          ggtitle(paste0("Wind directions ", minDate, " to ", maxDate, " (all time points)")) +
           scale_fill_viridis(discrete = T, alpha = 1) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
@@ -657,7 +675,7 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
         windrose = ggplot(data=trajs[trajs$start_height == height[h],], aes(x=angle, y=stat(count/sum(count)))) + 
           geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill =  color[h]) +
           coord_polar(start = 0, clip = "off") +
-          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), "\n(all time points, ", as.character(height[h]), "m AGL)")) +
+          ggtitle(paste0("Wind directions ", minDate, " to ", maxDate, "\n(all time points, ", as.character(height[h]), "m AGL)")) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
         print(windrose)
@@ -678,7 +696,7 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
                                                                 fill=start_height)) +
           geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
           coord_polar(start = 0, clip = "off") +
-          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), " (", direction, " ", abs(d), "h)")) +
+          ggtitle(paste0("Wind directions ", minDate, " to ", maxDate, " (", direction, " ", abs(d), "h)")) +
           scale_fill_viridis(discrete = T, alpha = 1) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
@@ -690,7 +708,7 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
         windrose = ggplot(data=trajs[trajs$hour.inc == d & trajs$start_height == height[h],], aes(x=angle, y=stat(count/sum(count)))) +
           geom_histogram(aes(y = stat(count/sum(count))), bins = 360, fill = color[h]) +
           coord_polar(start = 0, clip = "off") +
-          ggtitle(paste0("Wind directions ", min(trajs$date), " to ", max(trajs$date), " \n(", direction, " ", abs(d), "h, ", height[h], "m AGL)")) +
+          ggtitle(paste0("Wind directions ", minDate, " to ", maxDate, " \n(", direction, " ", abs(d), "h, ", height[h], "m AGL)")) +
           scale_fill_viridis(discrete = T, alpha = 1) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           theme(plot.title = element_text(hjust = 0.5))
@@ -740,10 +758,14 @@ plot_altitudinal_profile = function(trajs){
     direction <- "forwards"
   }
   
+  # Get starting and ending dates
+  minDate <- min(as_datetime(trajs$date[trajs$hour.inc==0]))
+  maxDate <- max(as_datetime(trajs$date[trajs$hour.inc==0]))
+  
   # Plot altitudinal profiles
   alt_plot <- ggplot(data = mean_SE_trajs, aes(x = abs(hour.inc), y = mean_height)) +
     #geom_point(aes(color = factor(start_height)), shape = 17, size = 3) +
-    ggtitle(paste0("Trajectory altitude profile from ", min(trajs$date), "\nto ", max(trajs$date), ", ", direction, " ", abs(duration), " hours")) +
+    ggtitle(paste0("Trajectory altitude profile from ", minDate, "\nto ", maxDate, ", ", direction, " ", abs(duration), " hours")) +
     scale_color_viridis(begin = 1, end = 0, discrete = T, alpha = 1) +
     scale_fill_viridis(begin = 1, end = 0, discrete = T, alpha = 0.25) + 
     ylab("Altitude (m AGL)") +
@@ -844,6 +866,9 @@ if (duration == 1) {
 } else {
   print(paste0("Duration is", duration))
 }
+
+# Get the desired resolution
+resolution <- opt$resolution
 
 # Starting and ending hours for the different trajectories
 # start_hour <- gsub("[0-9]{8}_", "", opt$from)
@@ -989,7 +1014,7 @@ if ("rescue" %!in% names(opt)){
   
   #### Rasterize trajectories ####
   if(opt$verbose){print("Rasterizing trajectories...")}
-  traj_grids <- lapply(X=trajs, rasterize_trajectories, height = height, PRJ = PRJ)
+  traj_grids <- lapply(X=trajs, rasterize_trajectories, height = height, PRJ = PRJ, resolution = resolution)
 }
 
 #### Plot raster maps ####
