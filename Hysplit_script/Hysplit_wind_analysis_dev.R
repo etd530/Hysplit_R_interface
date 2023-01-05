@@ -850,8 +850,17 @@ PRJ <- proj4string(CRS("+init=epsg:4326")) #WGS84
 # if(opt$debug){print(dayblocks)}
 
 # coordinates
-coord <- list(c(opt$lat, opt$lon))
-if(opt$debug){print(coord)}
+if(is.double(opt$lat) & is.double(opt$lon)){
+  coord <- list(c(opt$lat, opt$lon))
+} else {
+  lats <- as.double(as.vector(strsplit(opt$lat, split = ",")[[1]]))
+  lons <- as.double(as.vector(strsplit(opt$lon, split = ",")[[1]]))
+  coord = list()
+  for (i in 1:length(lats)){
+    coord[[length(coord)+1]] <- c(lats[i], lons[i])
+  }
+}
+if(opt$debug){print("coord"); print(coord)}
 
 # height of the winds at starting point
 if(is.integer(opt$altitude)) {
