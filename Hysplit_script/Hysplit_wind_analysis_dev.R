@@ -1,4 +1,4 @@
-#!/usr/bin/env Rscript
+#!/opt/R/4.1.2/bin/Rscript
 
 # This example not working now!
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_Guyana.pdf --byhour 1 --verbose
@@ -45,6 +45,8 @@
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-10-22-06-00 --to 2013-10-25-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_6.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 1 --verbose --windrose_times '-100,-200,Inf'
 
 #### Load packages ####
+.libPaths("/home/GTlab/SOFTWARE/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
+Sys.setenv("R_LIBS_USER"="/home/GTlab/SOFTWARE/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
 library(splitr)       # to work with Hysplit (to download files mostly)
 library(opentraj)     # to work with Hysplit (does the calculations and plotting)
 library(lubridate)    # for parsing dates
@@ -811,7 +813,7 @@ AddMetFilesMod = function (month, Year, met, script.file, control.file)
 
 #### VARIABLES ####
 # path to hysplit installation
-hy_path <- "C:/hysplit/"
+hy_path <- "/home/GTlab/SOFTWARE/hysplit.v5.2.3_RHEL8.6_public/"
 
 # name for output file
 outfile <- paste0("./", opt$out)
