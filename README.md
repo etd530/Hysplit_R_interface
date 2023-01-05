@@ -16,8 +16,9 @@ Although the program itself does not require installation *per se*, you will nee
 in order to use it. In addition, there are a number of R depenencies that will be required and, to ensure compatibility **it is recommended to use R 4.1.2**.
 
 Therefore, it is recommended to first **install R 4.1.2 and HYSPLIT**. Then, **clone this repository** using `git` and open the R Project. The R `renv` package will
-automatically install itself. After it has finished, all other dependencies can be installed by **running `renv::restore()` in the R console**. Lastly, you will need 
-to open the code and change the first variable (line 728) so that it species the path to your local installation of HYSPLIT.
+automatically install itself. After it has finished, all other dependencies can be installed by **running `renv::restore()` in the R console**. You also need to open the code and change the following:
+- Change the shebang so that it points to you local installation of R 4.1.2.
+- Change the first variable (`hy_path`) so that it specifies the path to your local installation of HYSPLIT.
 
 <a name="running"/>
 
