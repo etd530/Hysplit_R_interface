@@ -45,8 +45,8 @@
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-10-22-06-00 --to 2013-10-25-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_6.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 1 --verbose --windrose_times '-100,-200,Inf'
 
 #### Load packages ####
-.libPaths("/home/GTlab/SOFTWARE/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
-Sys.setenv("R_LIBS_USER"="/home/GTlab/SOFTWARE/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
+.libPaths("renv/library/R-4.1/x86_64-pc-linux-gnu")
+Sys.setenv("R_LIBS_USER"="renv/library/R-4.1/x86_64-pc-linux-gnu")
 library(splitr)       # to work with Hysplit (to download files mostly)
 library(opentraj)     # to work with Hysplit (does the calculations and plotting)
 library(lubridate)    # for parsing dates
@@ -124,6 +124,10 @@ option_list = list(
   
   make_option(c("-R", "--resolution"), type = "integer", default = 10000,
               help = "Resolution to use to make the raster maps",
+              metavar = "integer"),
+  
+  make_option(c("-c", "--cores"), type = "integer", default = 0,
+              help = "Number of cores to use for parallel computing. If not set, will use all cores.",
               metavar = "integer")
 )
 
@@ -526,6 +530,53 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
   return(merged_trajs)
 }
 
+# Rasterization function form opentraj() modified to allow use of a specific number of cores
+RasterizeTrajMod = function (spLines, resolution = 10000, reduce = TRUE, parallel = FALSE, coreNum = 0) 
+{
+  getRasterGrid <- function(sp.lines, xmn, xmx, ymn, ymx, 
+                            ncols = 40, nrows = 40, resolution = 10000, ext = ext) {
+    rast <- raster(xmn = xmn, xmx = xmx, ymn = ymn, ymx = ymx, 
+                   ncols = ncols, nrows = nrows)
+    rast <- setValues(rast, NA)
+    crs1 <- "+proj=aea +lat_1=46 +lat_2=60 +lat_0=44 +lon_0=-68.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"
+    rast <- projectRaster(rast, crs = crs1, res = resolution)
+    crs2 <- proj4string(sp.lines)
+    rast <- projectRaster(rast, crs = crs2)
+    rast
+  }
+  ext <- extent(spLines)
+  if (parallel == TRUE) {
+    if (coreNum){
+      cores <- coreNum
+    } else {
+      cores <- detectCores()
+    }
+    list.splines <- SplitSpLines(spLines, cores)
+    cl <- makeCluster(cores)
+    registerDoParallel(cl)
+    rast2 <- foreach(sp.lines = list.splines, .combine = "c", 
+                     .packages = "raster") %dopar% {
+                       rast <- getRasterGrid(sp.lines, xmn = xmin(ext), 
+                                             xmx = xmax(ext), ymn = ymin(ext), ymx = ymax(ext), 
+                                             resolution = resolution)
+                       rasterize(sp.lines, rast, fun = "count", background = 0)
+                     }
+    stopCluster(cl)
+    if (reduce == T) {
+      rast2 <- Reduce("+", rast2)
+      rast2[rast2 == 0] <- NA
+    }
+    rast2
+  }
+  else {
+    rast <- getRasterGrid(spLines, xmn = xmin(ext), xmx = xmax(ext), 
+                          ymn = ymin(ext), ymx = ymax(ext), resolution = resolution)
+    rast2 <- rasterize(spLines, rast, fun = "count")
+    rast2
+  }
+}
+
+
 # Function to rasterize the trajectories
 rasterize_trajectories = function(trajs, height, PRJ, resolution){
   traj_grids <- list()
@@ -551,7 +602,7 @@ rasterize_trajectories = function(trajs, height, PRJ, resolution){
       parallelize = TRUE
     }
     # Get the raster
-    traj_freq<- RasterizeTraj(traj_lines, parallel = parallelize, resolution = resolution)
+    traj_freq<- RasterizeTrajMod(traj_lines, parallel = parallelize, resolution = resolution, coreNum = coreNum)
     
     # Change the absolute number of trajectories to relative number (i.e. from 0 to 1)
     max.val <- maxValue(traj_freq)        #gets the max value of the raster
@@ -920,6 +971,9 @@ if("margin" %in% names(opt)) {
 # Time points to use for the windrose histograms
 windrose_times <- as.vector(as.numeric(strsplit(x = gsub(pattern = "'", replacement = "", x = opt$windrose_times), 
                                                  split = ",", fixed = T)[[1]]))
+
+# Number of cores specified
+coreNum <- opt$cores
 
 if(opt$debug){print(windrose_times)}
 
