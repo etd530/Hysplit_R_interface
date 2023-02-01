@@ -1,4 +1,4 @@
-#!/opt/R/4.1.2/bin/Rscript
+#!/usr/local/bin/Rscript
 
 # This example not working now!
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_Guyana.pdf --byhour 1 --verbose
@@ -56,7 +56,10 @@ library(geosphere)    # needed for bearing()
 library(viridis)      # colorblind-friendly color palettes
 library(plyr)         # diverse useful functions
 library(optparse)     # Nice argument parsing
-
+library(rworldmap)    # to get the background map
+library(rworldxtra)   # to get the background map
+library(doParallel)     # to manage the cores used
+library(parallel)     # to manage the cores used
 
 #### ARGS ####
 option_list = list(
@@ -292,6 +295,16 @@ generate_datetimes_lists = function(by_year_month_day_hour, datesList) {
   return(datesList)
 }
 
+# modified version of PlotBgMap to change the background map so that we can pass a higher resultion one
+PlotBgMapMod = function (traj, ...) 
+{
+  hySplitProj <- CRS(proj4string(traj))
+  map <- getMap(resolution = "high")
+  canada <- spTransform(map, hySplitProj)
+  plot(map, border = "white", col = "lightgrey", 
+       ...)
+}
+
 #modified version of PlotTrajFreq, so that we can change the scale of the plot and the color scale (I did not find a way to do it directly, it seemed to be hardcoded)
 plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "white", 
                      pdf = F, file.name = "output", bb,...) 
@@ -308,7 +321,7 @@ plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "wh
   }
   if (background == T) {
     bb
-    PlotBgMap(spGridDf, xlim = bb[1, ], ylim = bb[2, ], 
+    PlotBgMapMod(spGridDf, xlim = bb[1, ], ylim = bb[2, ], 
               axes = TRUE)
     grid(col = "white")
     plot.add <- T
@@ -864,7 +877,8 @@ AddMetFilesMod = function (month, Year, met, script.file, control.file)
 
 #### VARIABLES ####
 # path to hysplit installation
-hy_path <- "/home/GTlab/SOFTWARE/hysplit.v5.2.3_RHEL8.6_public/"
+hy_path <- "/home/etd530/hysplit.v5.2.3_UbuntuOS20.04.4LTS_public/"
+
 
 # name for output file
 outfile <- paste0("./", opt$out)
