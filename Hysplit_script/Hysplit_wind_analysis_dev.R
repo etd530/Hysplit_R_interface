@@ -457,7 +457,8 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
     control.file.number <- control.file.number + 1
   }
   traj <- ReadFiles(process.working.dir, ID, dates.and.times, 
-                    tz)
+              tz)
+  
   if (add.new.column == T) {
     if (!missing(new.column.name) & !missing(new.column.value)) {
       traj[new.column.name] <- new.column.value
@@ -521,21 +522,30 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
     for (altitude in h) {
       for (i in 1:length(datesList)) {
         run_hour = paste(datesList[[i]][[2]], datesList[[i]][[3]], sep = ":")
-        CurrentTraj <- ProcTrajMod(lat = coordinate[1], lon = coordinate[2],
-                                   hour.interval = hourInt, 
-                                   name = "traj", start.hour = run_hour, 
-                                   end.hour = run_hour, 
-                                   met = paste0(hy_path, "working/"), 
-                                   out = paste0(hy_path, "working/Out_files/"), 
-                                   hours = duration, height = altitude, 
-                                   hy.path = hy_path, 
-                                   dates = as.Date(datesList[[i]][[1]]), 
-                                   tz = attr(datesList[[i]][[1]], "tzone"))
-        CurrentTraj$start_height <- altitude
-        if(exists("merged_trajs")) {
-          merged_trajs <- rbind(merged_trajs, CurrentTraj)
-        } else {
-          merged_trajs <- CurrentTraj
+        CurrentTraj <- tryCatch({
+          ProcTrajMod(lat = coordinate[1], lon = coordinate[2],
+                      hour.interval = hourInt, 
+                      name = "traj", start.hour = run_hour, 
+                      end.hour = run_hour, 
+                      met = paste0(hy_path, "working/"), 
+                      out = paste0(hy_path, "working/Out_files/"), 
+                      hours = duration, height = altitude, 
+                      hy.path = hy_path, 
+                      dates = as.Date(datesList[[i]][[1]]), 
+                      tz = attr(datesList[[i]][[1]], "tzone"))
+        }, error = function(err){
+          pritn(err)
+          print(paste("Unexpected error when running date:", as.Date(datesList[[i]][[1]]), run_hour, lat, lon, ". Please revise that date manually."))
+          return(0)
+        }
+        )
+        if (is.data.frame(CurrentTraj)) {
+          CurrentTraj$start_height <- altitude
+          if(exists("merged_trajs")) {
+            merged_trajs <- rbind(merged_trajs, CurrentTraj)
+          } else {
+            merged_trajs <- CurrentTraj
+          }
         }
       }
     } 
