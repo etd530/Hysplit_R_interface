@@ -12,13 +12,13 @@ calculation of large numbers of trajectories, and produces different types of pl
 <a name="installation"/>
 
 ## Installation
-Although the program itself does not require installation *per se*, you will need to have a local installation of [HYSPLIT](https://www.ready.noaa.gov/HYSPLIT.php) 
+Although the program itself does not require installation *per se*, you will need to have a local installation of HYSPLIT (available [here](https://www.ready.noaa.gov/HYSPLIT.php)) 
 in order to use it. In addition, there are a number of R depenencies that will be required and, to ensure compatibility **it is recommended to use R 4.1.2**.
 
-Therefore, it is recommended to first **install R 4.1.2 and HYSPLIT**. Then, **clone this repository** using `git` and open the R Project. The R `renv` package will
-automatically install itself. After it has finished, all other dependencies can be installed by **running `renv::restore()` in the R console**. You also need to open the code and change the following:
-- Change the shebang so that it points to you local installation of R 4.1.2.
+Therefore, it is recommended to first **install R 4.1.2 and HYSPLIT**. We recommend [following these instructions](https://docs.posit.co/resources/install-r/) if you need to have multiple R versions in a single machine. Then, **clone this repository** using `git` and open the R Project. The R `renv` package will automatically install itself. After it has finished, all other dependencies can be installed by **running `renv::restore()` in the R console**. You also need to open the R script and change the following:
+- Change the shebang (the first line in the script) so that it points to you local installation of R 4.1.2. If you followed the recommended instructions [here]((https://docs.posit.co/resources/install-r/)), that should be `/opt/R/4.1.2/bin/Rscript`.
 - Change the first variable (`hy_path`) so that it specifies the path to your local installation of HYSPLIT.
+- Change the paths in `.libPaths()` and `Sys.setenv()` to point to the R library created by `renv`. This will be within the `renv/library/` folder located inside this repository.
 
 <a name="running"/>
 
@@ -84,4 +84,11 @@ one may want to compute trajectories for all hours between 10:00 and 18:00 from 
 ### Meteorological files not downloading properly  
 When a run will require meteorological files that need to be downloaded, there is a chance that if the Internet connection is not working properly the file download will halt, and the program will exit with an error.  
 
-If this happens, one needs to go to the HYSPLIT installation folder, enter the `working` folder and remove the incomplete meterological file. These files are identified by the `.gbl` extension and are named starting with RP and then indicating the year and the month. If the file is not removed, HYSPLIT will think it already has the it and try to compute the trajectories, but then it will give an error, as some data will be missing.
+If this happens, one needs to go to the HYSPLIT installation folder, enter the `working` folder and remove the incomplete meterological file. These files are identified by the `.gbl` extension and are named starting with RP and then indicating the year and the month. If the file is not removed, HYSPLIT will think it already has it and try to compute the trajectories, but then it will give an error, as some data will be missing.
+
+If downloading the files is giving problems, you may also try to download them (in Linux) by running the following **from the `working/` directory of your hysplit installation**:
+
+```
+for ((year=1948; year<2023; year++)); do for month in 01 02 03 04 05 06 07 08 09 10 11 12; do wget ftp://ftp.arl.noaa.gov/pub/archives/reanalysis/RP${year}${month}.gbl; done; done
+```
+This will download the entire Reanalysis database from 1948 to 2022, but you may adjust this to download only the files you need. Note that **the full database until 2022 takes about 102GB of disk space**.
