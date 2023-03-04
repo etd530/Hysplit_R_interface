@@ -44,6 +44,9 @@
 ## test 6: same as test 2, but more hours
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-10-22-06-00 --to 2013-10-25-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_6.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 1 --verbose --windrose_times '-100,-200,Inf'
 
+# test 7: single trajectory at October 28th 1948, 06:00, at 1000 masl, 10 hours backwards. The aim is to make sure a bug in parsing years has been fixed
+#./Hysplit_wind_analysis_dev.R --from 1948-10-28-06-00 --to 1948-10-28-06-00 --lat 5.745974 --lon -53.934047 --altitude 1000 --duration -10 --out test_7.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 0 --verbose --windrose_times '-10'
+
 #### Load packages ####
 .libPaths("renv/library/R-4.1/x86_64-pc-linux-gnu")
 Sys.setenv("R_LIBS_USER"="renv/library/R-4.1/x86_64-pc-linux-gnu")
@@ -456,8 +459,8 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
     }
     control.file.number <- control.file.number + 1
   }
-  traj <- ReadFiles(process.working.dir, ID, dates.and.times, 
-              tz)
+  traj <- ReadFilesMod(process.working.dir, ID, dates.and.times, 
+              tz, lubridate::year(dates))
   
   if (add.new.column == T) {
     if (!missing(new.column.name) & !missing(new.column.value)) {
@@ -541,6 +544,29 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
         )
         if (is.data.frame(CurrentTraj)) {
           CurrentTraj$start_height <- altitude
+          for(i in 1:nrow(CurrentTraj)){
+            if(i != nrow(CurrentTraj)){
+              lat1 = CurrentTraj$lat[i]
+              lat2 = CurrentTraj$lat[i+1]
+              lon1 = CurrentTraj$lon[i]
+              lon2 = CurrentTraj$lon[i+1]
+              dist = sqrt((lat2-lat1)**2 + ((lon2-lon1)*cos(0.5*(lat2+lat1)))**2)*111000
+              speed_fwd = dist/3600.0
+            } else {
+              speed_fwd = NA
+            }
+            if(i != 1){
+              lat1 = CurrentTraj$lat[i-1]
+              lat2 = CurrentTraj$lat[i]
+              lon1 = CurrentTraj$lon[i-1]
+              lon2 = CurrentTraj$lon[i]
+              dist = sqrt((lat2-lat1)**2 + ((lon2-lon1)*cos(0.5*(lat2+lat1)))**2)*111000
+              speed_bwd = dist/3600.0
+            } else {
+              speed_bwd = NA
+            }
+              CurrentTraj$wind_speed[i] <- mean(c(speed_bwd, speed_fwd), na.rm=TRUE)
+          }
           if(exists("merged_trajs")) {
             merged_trajs <- rbind(merged_trajs, CurrentTraj)
           } else {
@@ -883,6 +909,37 @@ AddMetFilesMod = function (month, Year, met, script.file, control.file)
   }
 }
 
+# Modified version of ReadFiles from opentraj to fix bug in inferring year from HYSPLIT's output
+ReadFilesMod = function (working_dir, ID, dates, tz, year) 
+{
+  combine.file.name <- paste("Rcombined_", ID, ".txt", sep = "")
+  dump.file.name <- paste("tdump_", ID, "_", "*", sep = "")
+  files <- list.files(path = working_dir, pattern = paste("tdump_", 
+                                                          ID, sep = ""))
+  output <- file(combine.file.name, "w")
+  if (length(dates) != length(files)) {
+    print(length(dates))
+    print(length(files))
+    stop("Please, make sure that all required meteorological files are available. Also, delete \n         all folders that starts with \"process_\".")
+  }
+  for (i in files) {
+    input <- readLines(i)
+    input <- input[-c(1:7)]
+    writeLines(input, output)
+  }
+  close(output)
+  traj <- read.table(file.path(working_dir, combine.file.name), 
+                     header = FALSE)
+  traj <- subset(traj, select = -c(2, 7, 8))
+  traj <- rename(traj, c(V1 = "receptor", V3 = "year", V4 = "month", 
+                         V5 = "day", V6 = "hour", V9 = "hour.inc", V10 = "lat", 
+                         V11 = "lon", V12 = "height", V13 = "pressure"))
+  traj$year <- year
+  traj$date2 <- with(traj, ISOdatetime(year, month, day, hour, 
+                                       min = 0, sec = 0, tz = tz))
+  traj$date <- traj$date2 - 3600 * traj$hour.inc
+  traj
+}
 
 
 #### VARIABLES ####
