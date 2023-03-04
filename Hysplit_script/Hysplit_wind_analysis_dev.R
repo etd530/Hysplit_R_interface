@@ -377,6 +377,12 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
   hy.split.wd <- file.path(hy.path, "working")
   hy.split.wd <- normalizePath(hy.split.wd)
   setwd(hy.split.wd)
+  processes_list <- list.files()[grep("process_", list.files())]
+  if(length(processes_list)==0) {
+    ID = 1
+  } else {
+    ID = max(as.numeric(gsub("process_", "", processes_list)))+1
+  }
   folder.name = paste("process_", ID, sep = "")
   process.working.dir <- file.path(hy.split.wd, folder.name)
   dir.create(process.working.dir, showWarnings = FALSE)
