@@ -1,4 +1,4 @@
-#!/usr/local/bin/Rscript
+#!/opt/R/4.1.2/bin/Rscript
 
 # This example not working now!
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_Guyana.pdf --byhour 1 --verbose
@@ -48,8 +48,8 @@
 #./Hysplit_wind_analysis_dev.R --from 1948-10-28-06-00 --to 1948-10-28-06-00 --lat 5.745974 --lon -53.934047 --altitude 1000 --duration -10 --out test_7.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 0 --verbose --windrose_times '-10'
 
 #### Load packages ####
-.libPaths("renv/library/R-4.1/x86_64-pc-linux-gnu")
-Sys.setenv("R_LIBS_USER"="renv/library/R-4.1/x86_64-pc-linux-gnu")
+.libPaths("/sdc/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
+Sys.setenv("R_LIBS_USER"="/sdc/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
 library(splitr)       # to work with Hysplit (to download files mostly)
 library(opentraj)     # to work with Hysplit (does the calculations and plotting)
 library(lubridate)    # for parsing dates
@@ -537,7 +537,7 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
                       dates = as.Date(datesList[[i]][[1]]), 
                       tz = attr(datesList[[i]][[1]], "tzone"))
         }, error = function(err){
-          pritn(err)
+          print(err)
           print(paste("Unexpected error when running date:", as.Date(datesList[[i]][[1]]), run_hour, lat, lon, ". Please revise that date manually."))
           return(0)
         }
@@ -944,7 +944,7 @@ ReadFilesMod = function (working_dir, ID, dates, tz, year)
 
 #### VARIABLES ####
 # path to hysplit installation
-hy_path <- "/home/etd530/hysplit.v5.2.3_UbuntuOS20.04.4LTS_public/"
+hy_path <- "/sdc/hysplit.v5.2.3_RHEL8.6_public/"
 
 
 # name for output file
