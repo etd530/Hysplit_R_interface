@@ -14,7 +14,7 @@
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-10-28-06-00 --to 2013-10-28-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_0_rescued.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 0 --verbose --windrose_times '-100,-200,Inf' --rescue test_0.pdf.RData
 
 # test 1: trajectories from 10:00 to 18:00, for days 1 to 10 of april, may and june, of years 2000 to 2002
-#"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2000-04-01-10-00 --to 2002-06-10-18-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --out test_1.pdf --byyear 1 --bymonth 1 --byday 1 --byhour 1 --verbose
+#./Hysplit_wind_analysis_dev.R --from 2000-04-01-10-00 --to 2002-06-10-18-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --out test_1.pdf --byyear 1 --bymonth 1 --byday 1 --byhour 1 --verbose --no_raster=TRUE --run_id=25
 
 ## test 2: trajectories from October 22nd 2013 at 06:00 to October 25th 2013 at 06:00, one per hour, backwards 24 hours each
 # from = "2013-10-22-06-00"
@@ -48,8 +48,8 @@
 #./Hysplit_wind_analysis_dev.R --from 1948-10-28-06-00 --to 1948-10-28-06-00 --lat 5.745974 --lon -53.934047 --altitude 1000 --duration -10 --out test_7.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 0 --verbose --windrose_times '-10'
 
 #### Load packages ####
-.libPaths("/sdc/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
-Sys.setenv("R_LIBS_USER"="/sdc/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
+.libPaths("/home/etd530/Documents/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
+Sys.setenv("R_LIBS_USER"="/home/etd530/Documents/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
 library(splitr)       # to work with Hysplit (to download files mostly)
 library(opentraj)     # to work with Hysplit (does the calculations and plotting)
 library(lubridate)    # for parsing dates
@@ -134,6 +134,14 @@ option_list = list(
   
   make_option(c("-c", "--cores"), type = "integer", default = 0,
               help = "Number of cores to use for parallel computing. If not set, will use all cores.",
+              metavar = "integer"),
+  
+  make_option(c("--no_raster"), type = "logical", default = FALSE, action="store_true",
+              help = "Do not compute rasterization of trajectories (deafult: false).",
+              metavar = "boolean"),
+  
+  make_option(c("-i", "--run_id"), type = "integer", default = 1,
+              help = "ID number to use for the temporary process folders.",
               metavar = "integer")
 )
 
@@ -377,12 +385,13 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
   hy.split.wd <- file.path(hy.path, "working")
   hy.split.wd <- normalizePath(hy.split.wd)
   setwd(hy.split.wd)
-  processes_list <- list.files()[grep("process_", list.files())]
-  if(length(processes_list)==0) {
-    ID = 1
-  } else {
-    ID = max(as.numeric(gsub("process_", "", processes_list)))+1
-  }
+  # processes_list <- list.files()[grep("process_", list.files())]
+  # if(length(processes_list)==0) {
+  ID = ID
+  # } else {
+    # print(paste0("WARNING: a folder with ID = ", ID, " already exists. Adding 1 to the provided id number."))
+    # ID = max(as.numeric(gsub("process_", "", processes_list)))+1
+  # }
   folder.name = paste("process_", ID, sep = "")
   process.working.dir <- file.path(hy.split.wd, folder.name)
   dir.create(process.working.dir, showWarnings = FALSE)
@@ -541,7 +550,8 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
                       hours = duration, height = altitude, 
                       hy.path = hy_path, 
                       dates = as.Date(datesList[[i]][[1]]), 
-                      tz = attr(datesList[[i]][[1]], "tzone"))
+                      tz = attr(datesList[[i]][[1]], "tzone"),
+                      ID = opt$run_id)
         }, error = function(err){
           print(err)
           print(paste("Unexpected error when running date:", as.Date(datesList[[i]][[1]]), run_hour, lat, lon, ". Please revise that date manually."))
@@ -950,7 +960,7 @@ ReadFilesMod = function (working_dir, ID, dates, tz, year)
 
 #### VARIABLES ####
 # path to hysplit installation
-hy_path <- "/sdc/hysplit.v5.2.3_RHEL8.6_public/"
+hy_path <- "/home/etd530/hysplit.v5.2.3_UbuntuOS20.04.4LTS_public/"
 
 
 # name for output file
@@ -1165,28 +1175,30 @@ if ("rescue" %!in% names(opt)){
                   latlon = coord, h = height, duration = duration)
   
   #### Rasterize trajectories ####
-  if(opt$verbose){print("Rasterizing trajectories...")}
-  traj_grids <- lapply(X=trajs, rasterize_trajectories, height = height, PRJ = PRJ, resolution = resolution)
+  if(!opt$no_raster) {
+    if(opt$verbose){print("Rasterizing trajectories...")}
+    traj_grids <- lapply(X=trajs, rasterize_trajectories, height = height, PRJ = PRJ, resolution = resolution)
+  }
 }
 
 #### Plot raster maps ####
-if(opt$verbose){print("Plotting raster maps...")}
 pdf(outfile)
-
-print(length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0 &
-                                   trajs[[1]]$start_height == unique(trajs[[1]]$start_height)[1]]))
-
-if (length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0&
-                               trajs[[1]]$start_height == unique(trajs[[1]]$start_height)[1]])>1){
-  # lapply(X=traj_grids, FUN = plot_raster_maps, trajs = trajs, height = height)
-  mapply(FUN = plot_raster_maps, 
-         traj_grids = traj_grids, 
-         trajs = trajs, 
-         MoreArgs =  list(height = height))
-} else if (opt$verbose){
-  print("WARNING: No raster maps will be generated as only one trajectory per height is being run")
+if (!opt$no_raster){
+  if(opt$verbose){print("Plotting raster maps...")}
+  print(length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0 &
+                                     trajs[[1]]$start_height == unique(trajs[[1]]$start_height)[1]]))
+  
+  if (length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0&
+                                 trajs[[1]]$start_height == unique(trajs[[1]]$start_height)[1]])>1){
+    # lapply(X=traj_grids, FUN = plot_raster_maps, trajs = trajs, height = height)
+    mapply(FUN = plot_raster_maps, 
+           traj_grids = traj_grids, 
+           trajs = trajs, 
+           MoreArgs =  list(height = height))
+  } else if (opt$verbose){
+    print("WARNING: No raster maps will be generated as only one trajectory per height is being run")
+  }
 }
-
 
 #### Plot Trajlines####
 if(opt$verbose){print("Plotting trajectories...")}
