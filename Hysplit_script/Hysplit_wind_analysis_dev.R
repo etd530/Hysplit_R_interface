@@ -4,7 +4,7 @@
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_Guyana.pdf --byhour 1 --verbose
 
 #### HYSPLIT Program ####
-#################### Testing version for the new date parsing ###################
+#################### Testing version ###################
 
 # TESTS
 # test 0: single trajectory at October 28th 2013, 06:00, for 3 different heights, 200 hours backwards
@@ -14,7 +14,7 @@
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 2013-10-28-06-00 --to 2013-10-28-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_0_rescued.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 0 --verbose --windrose_times '-100,-200,Inf' --rescue test_0.pdf.RData
 
 # test 1: trajectories from 10:00 to 18:00, for days 1 to 10 of april, may and june, of years 2000 to 2002
-#./Hysplit_wind_analysis_dev.R --from 2000-04-01-10-00 --to 2002-06-10-18-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --out test_1.pdf --byyear 1 --bymonth 1 --byday 1 --byhour 1 --verbose --no_raster=TRUE --run_id=25
+#./Hysplit_wind_analysis_dev.R --from 2000-04-01-10-00 --to 2002-06-10-18-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --out test_1.pdf --byyear 1 --bymonth 1 --byday 1 --byhour 1 --verbose --no_raster --run_id=25
 
 ## test 2: trajectories from October 22nd 2013 at 06:00 to October 25th 2013 at 06:00, one per hour, backwards 24 hours each
 # from = "2013-10-22-06-00"
@@ -142,7 +142,11 @@ option_list = list(
   
   make_option(c("-i", "--run_id"), type = "integer", default = 1,
               help = "ID number to use for the temporary process folders.",
-              metavar = "integer")
+              metavar = "integer"),
+  
+  make_option(c("-n", "--no_plots"), type = "logical", default = FALSE, action="store_true",
+              help = "Do not output any plots, only the .RData (deafult: false).",
+              metavar = "boolean")
 )
 
 opt_parser = OptionParser(option_list=option_list)
@@ -1182,41 +1186,43 @@ if ("rescue" %!in% names(opt)){
 }
 
 #### Plot raster maps ####
-pdf(outfile)
-if (!opt$no_raster){
-  if(opt$verbose){print("Plotting raster maps...")}
-  print(length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0 &
-                                     trajs[[1]]$start_height == unique(trajs[[1]]$start_height)[1]]))
-  
-  if (length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0&
-                                 trajs[[1]]$start_height == unique(trajs[[1]]$start_height)[1]])>1){
-    # lapply(X=traj_grids, FUN = plot_raster_maps, trajs = trajs, height = height)
-    mapply(FUN = plot_raster_maps, 
-           traj_grids = traj_grids, 
-           trajs = trajs, 
-           MoreArgs =  list(height = height))
-  } else if (opt$verbose){
-    print("WARNING: No raster maps will be generated as only one trajectory per height is being run")
+if (!opt$no_plots) {
+  pdf(outfile)
+  if (!opt$no_raster){
+    if(opt$verbose){print("Plotting raster maps...")}
+    print(length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0 &
+                                       trajs[[1]]$start_height == unique(trajs[[1]]$start_height)[1]]))
+    
+    if (length(trajs[[1]]$hour.inc[trajs[[1]]$hour.inc == 0&
+                                   trajs[[1]]$start_height == unique(trajs[[1]]$start_height)[1]])>1){
+      # lapply(X=traj_grids, FUN = plot_raster_maps, trajs = trajs, height = height)
+      mapply(FUN = plot_raster_maps, 
+             traj_grids = traj_grids, 
+             trajs = trajs, 
+             MoreArgs =  list(height = height))
+    } else if (opt$verbose){
+      print("WARNING: No raster maps will be generated as only one trajectory per height is being run")
+    }
   }
-}
 
-#### Plot Trajlines####
-if(opt$verbose){print("Plotting trajectories...")}
-lapply(X=trajs, FUN = plot_trajlines, PRJ = PRJ)
-
-
-#### Plot windrose histograms ####
-if(opt$verbose){print("Plotting windrose histograms...")}
-trajs <- lapply(X = trajs, FUN = plot_windrose_hist, height = height, duration = windrose_times)
-
-
-#### Plot altitudinal profile plots ####
-if(opt$verbose){print("Plotting altitudinal profiles...")}
-lapply(X = trajs, FUN = plot_altitudinal_profile)
-
-
-dev.off()
-if(opt$verbose){print(paste0("All plots saved to ", outfile))}
+  #### Plot Trajlines####
+  if(opt$verbose){print("Plotting trajectories...")}
+  lapply(X=trajs, FUN = plot_trajlines, PRJ = PRJ)
+  
+  
+  
+  
+  #### Plot windrose histograms ####
+  if(opt$verbose){print("Plotting windrose histograms...")}
+  trajs <- lapply(X = trajs, FUN = plot_windrose_hist, height = height, duration = windrose_times)
+  
+  
+  #### Plot altitudinal profile plots ####
+  if(opt$verbose){print("Plotting altitudinal profiles...")}
+  lapply(X = trajs, FUN = plot_altitudinal_profile)
+  dev.off()
+  if(opt$verbose){print(paste0("All plots saved to ", outfile))}
+  }
 
 #### Save image of data (only ir not rescuing previous RData)####
 if("rescue" %!in% names(opt)){
