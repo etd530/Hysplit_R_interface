@@ -373,9 +373,8 @@ plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "wh
 }
 
 # modified version of ProcTraj from opentraj
-ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "london", 
-                        start.hour = "00:00", end.hour = "23:00", met, out, hours = 12, 
-                        height = 100, hy.path, ID = 1, dates, script.name = "test", 
+ProcTrajMod = function (lat = 51.5, lon = -45.1, name = "london", met, out, hours = 12, 
+                        height = 100, hy.path, ID = 1, datetimes, script.name = "test", 
                         add.new.column = F, new.column.name, new.column.value, tz = "GMT", 
                         clean.files = TRUE) 
 {
@@ -412,15 +411,16 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
   control.file.number <- 1
   script.name <- paste(script.name, "_", ID, script.extension, 
                        sep = "")
-  dates.and.times <- laply(.data = dates, .fun = function(d) {
-    start.day <- paste(d, start.hour, sep = " ")
-    end.day <- paste(d, end.hour, sep = " ")
-    posix.date <- seq(as.POSIXct(start.day, tz), as.POSIXct(end.day, 
-                                                            tz), by = paste(hour.interval, "hour", sep = " "))
+  dates.and.times <- laply(.data = datetimes, .fun = function(d) {
+     # start.day <- paste(d[[1]], start.hour, sep = " ")
+     # end.day <- paste(d[[1]], end.hour, sep = " ")
+     posix.date <- as.POSIXct(paste0(d[[1]], " ", d[[2]], ":", d[[3]]), tz = TZ)
+     # posix.date <- seq(as.POSIXct(start.day, tz), as.POSIXct(end.day, 
+                                                            # tz), by = paste(hour.interval, "hour", sep = " "))
     as.character(posix.date)
   })
   dates.and.times <- unique(dates.and.times)
-  hour.interval <- paste(hour.interval, "hour", sep = " ")
+  # hour.interval <- paste(hour.interval, "hour", sep = " ")
   for (i in 1:length(dates.and.times)) {
     control.file <- "CONTROL"
     date <- as.POSIXct(dates.and.times[i], tz = tz)
@@ -479,7 +479,7 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
     control.file.number <- control.file.number + 1
   }
   traj <- ReadFilesMod(process.working.dir, ID, dates.and.times, 
-              tz, lubridate::year(dates))
+              tz, lubridate::year(dates.and.times))
   
   if (add.new.column == T) {
     if (!missing(new.column.name) & !missing(new.column.value)) {
@@ -539,22 +539,24 @@ get_met_files = function(datesList) {
 }
 
 # Function to run the trajectories with the dates from a list
-compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, duration, h) {
+compute_trajectories = function(datesList, latlon, hy_path.=hy_path, duration, h) {
+  timezone = attr(datesList[[1]][[1]], "tzone")
   for (coordinate in latlon) {
     for (altitude in h) {
-      for (i in 1:length(datesList)) {
-        run_hour = paste(datesList[[i]][[2]], datesList[[i]][[3]], sep = ":")
+        # run_hour = paste(datesList[[i]][[2]], datesList[[i]][[3]], sep = ":")
         CurrentTraj <- tryCatch({
           ProcTrajMod(lat = coordinate[1], lon = coordinate[2],
-                      hour.interval = hourInt, 
-                      name = "traj", start.hour = run_hour, 
-                      end.hour = run_hour, 
+                      # hour.interval = hourInt, 
+                      name = "traj",
+                      # start.hour = run_hour, 
+                      # end.hour = run_hour, 
                       met = paste0(hy_path, "working/"), 
                       out = paste0(hy_path, "working/Out_files/"), 
                       hours = duration, height = altitude, 
                       hy.path = hy_path, 
-                      dates = as.Date(datesList[[i]][[1]]), 
-                      tz = attr(datesList[[i]][[1]], "tzone"),
+                      datetimes = datesList, 
+                      tz = TZ, 
+                        # attr(datesList[[i]][[1]], "tzone"),
                       ID = opt$run_id)
         }, error = function(err){
           print(err)
@@ -593,7 +595,6 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
             merged_trajs <- CurrentTraj
           }
         }
-      }
     } 
   }
   return(merged_trajs)
@@ -1175,7 +1176,7 @@ if ("rescue" %!in% names(opt)){
   #### Calculate trajectories ####
   if(opt$verbose){print("Starting trajectory calculations. Please wait...")}
   
-  trajs <- lapply(X=blocks_list, FUN = compute_trajectories, hourInt = 1, 
+  trajs <- lapply(X=blocks_list, FUN = compute_trajectories, 
                   latlon = coord, h = height, duration = duration)
   
   #### Rasterize trajectories ####
