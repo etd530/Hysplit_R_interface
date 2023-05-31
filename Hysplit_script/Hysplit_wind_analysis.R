@@ -548,7 +548,7 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
         if(opt$verbose){
           print(paste0("Computing trajectory for ", as.character(as.Date(datesList[[i]][[1]])), " at ", 
                        as.character(run_hour), " at altitude of ", as.character(altitude), 
-                       " and coordinates of ", as.character(coordinate[1], ",", as.character(coordinate[2]))))
+                       " and coordinates of ", as.character(coordinate[1]), ",", as.character(coordinate[2])))
         }
         
         CurrentTraj <- tryCatch({
