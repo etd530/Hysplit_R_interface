@@ -565,7 +565,7 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
                       ID = opt$run_id)
         }, error = function(err){
           print(err)
-          print(paste("Unexpected error when running date:", as.Date(datesList[[i]][[1]]), run_hour, lat, lon, ". Please revise that date manually."))
+          print(paste("Unexpected error when running date:", as.Date(datesList[[i]][[1]]), run_hour, as.character(coordinate[1]), as.character(coordinate[2]), ". Please revise that date manually."))
           return(0)
         }
         )
