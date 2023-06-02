@@ -1,4 +1,4 @@
-#!/opt/R/4.1.2/bin/Rscript
+#!/usr/local/bin/Rscript
 
 # This example not working now!
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_Guyana.pdf --byhour 1 --verbose
@@ -216,7 +216,8 @@ if("rescue" %in% names(opt)){
 # Function to get list of dates like the one given as input but +-X months
 get_prev_post_dates = function(datesList, increment) {
   for (i in 1:length(datesList)) {
-    datesList[[i]][[1]]$mon <- datesList[[i]][[1]]$mon + increment
+    mydate <- datesList[[i]][[1]] %m+% months(increment)
+    datesList[[i]][[1]] <- mydate
   }
   return(datesList)
 }
@@ -478,8 +479,16 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
     }
     control.file.number <- control.file.number + 1
   }
-  traj <- ReadFilesMod(process.working.dir, ID, dates.and.times, 
-              tz, lubridate::year(dates))
+  traj <- tryCatch(
+    {
+      ReadFilesMod(process.working.dir, ID, dates.and.times, 
+                   tz, lubridate::year(dates))
+    }, error = function(err){
+      print(err)
+      print("ERROR: ReadfilesMod failed to read HYSPLIT output file")
+      return(0)
+    }
+  )
   
   if (add.new.column == T) {
     if (!missing(new.column.name) & !missing(new.column.value)) {
@@ -494,6 +503,7 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
     save(traj, file = file.name)
   }
   setwd(hy.split.wd)
+  
   if (clean.files == T) {
     unlink(folder.name, recursive = TRUE)
   }
@@ -565,7 +575,12 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
                       ID = opt$run_id)
         }, error = function(err){
           print(err)
-          print(paste("Unexpected error when running date:", as.Date(datesList[[i]][[1]]), run_hour, as.character(coordinate[1]), as.character(coordinate[2]), ". Please revise that date manually."))
+          print(paste("Unexpected error when running date:", 
+                      as.Date(datesList[[i]][[1]]), "at", as.character(run_hour), 
+                      "at an altitude of", as.character(altitude),
+                      "meteres and coordinates of",
+                      as.character(coordinate[1]), as.character(coordinate[2]), 
+                      ". Please revise that date manually."))
           return(0)
         }
         )
