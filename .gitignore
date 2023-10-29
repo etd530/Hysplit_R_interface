@@ -1,6 +1,6 @@
 *.pdf
 *.RData
 *.Rhistory
-*.Rprofile
-*.Rproj.user
-.Rproj.user
+Hysplit_script/.Rproj.user/
+Hysplit_script/.Rproj.user/shared/notebooks/paths
+*.sh
