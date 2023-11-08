@@ -48,8 +48,8 @@
 #./Hysplit_wind_analysis_dev.R --from 1948-10-28-06-00 --to 1948-10-28-06-00 --lat 5.745974 --lon -53.934047 --altitude 1000 --duration -10 --out test_7.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 0 --verbose --windrose_times '-10'
 
 #### Load packages ####
-.libPaths("/home/etd530/Documents/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
-Sys.setenv("R_LIBS_USER"="/home/etd530/Documents/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
+.libPaths("/home/etd530/Documents/Hysplit_R_interface/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
+Sys.setenv("R_LIBS_USER"="/home/etd530/Documents/Hysplit_R_interface/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
 library(splitr)       # to work with Hysplit (to download files mostly)
 library(opentraj)     # to work with Hysplit (does the calculations and plotting)
 library(lubridate)    # for parsing dates
@@ -592,7 +592,8 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
               lat2 = CurrentTraj$lat[i+1]
               lon1 = CurrentTraj$lon[i]
               lon2 = CurrentTraj$lon[i+1]
-              dist = sqrt((lat2-lat1)**2 + ((lon2-lon1)*cos(0.5*(lat2+lat1)))**2)*111000
+              # dist = sqrt((lat2-lat1)**2 + ((lon2-lon1)*cos(0.5*(lat2+lat1)))**2)*111000
+              dist = pointDistance(cbind(lon1, lat1), c(lon2, lat2), lonlat = T)
               speed_fwd = dist/3600.0
             } else {
               speed_fwd = NA
@@ -602,7 +603,8 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
               lat2 = CurrentTraj$lat[i]
               lon1 = CurrentTraj$lon[i-1]
               lon2 = CurrentTraj$lon[i]
-              dist = sqrt((lat2-lat1)**2 + ((lon2-lon1)*cos(0.5*(lat2+lat1)))**2)*111000
+              # dist = sqrt((lat2-lat1)**2 + ((lon2-lon1)*cos(0.5*(lat2+lat1)))**2)*111000
+              dist = pointDistance(cbind(lon1, lat1), c(lon2, lat2), lonlat = T)
               speed_bwd = dist/3600.0
             } else {
               speed_bwd = NA
