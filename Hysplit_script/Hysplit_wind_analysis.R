@@ -1,4 +1,4 @@
-#!/usr/local/bin/Rscript
+#!/opt/R/4.1.2/bin/Rscript
 
 # This example not working now!
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_Guyana.pdf --byhour 1 --verbose
@@ -48,8 +48,8 @@
 #./Hysplit_wind_analysis_dev.R --from 1948-10-28-06-00 --to 1948-10-28-06-00 --lat 5.745974 --lon -53.934047 --altitude 1000 --duration -10 --out test_7.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 0 --verbose --windrose_times '-10'
 
 #### Load packages ####
-.libPaths("/home/etd530/Documents/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
-Sys.setenv("R_LIBS_USER"="/home/etd530/Documents/Hysplit_Vcardui/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
+.libPaths("/home/etd530/Documents/Hysplit_R_interface/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
+Sys.setenv("R_LIBS_USER"="/home/etd530/Documents/Hysplit_R_interface/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
 library(splitr)       # to work with Hysplit (to download files mostly)
 library(opentraj)     # to work with Hysplit (does the calculations and plotting)
 library(lubridate)    # for parsing dates
@@ -216,8 +216,7 @@ if("rescue" %in% names(opt)){
 # Function to get list of dates like the one given as input but +-X months
 get_prev_post_dates = function(datesList, increment) {
   for (i in 1:length(datesList)) {
-    mydate <- datesList[[i]][[1]] %m+% months(increment)
-    datesList[[i]][[1]] <- mydate
+    datesList[[i]][[1]]$mon <- datesList[[i]][[1]]$mon + increment
   }
   return(datesList)
 }
@@ -374,9 +373,8 @@ plotRaster=function (spGridDf, background = T, overlay = NA, overlay.color = "wh
 }
 
 # modified version of ProcTraj from opentraj
-ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "london", 
-                        start.hour = "00:00", end.hour = "23:00", met, out, hours = 12, 
-                        height = 100, hy.path, ID = 1, dates, script.name = "test", 
+ProcTrajMod = function (lat = 51.5, lon = -45.1, name = "london", met, out, hours = 12, 
+                        height = 100, hy.path, ID = 1, datetimes, script.name = "test", 
                         add.new.column = F, new.column.name, new.column.value, tz = "GMT", 
                         clean.files = TRUE) 
 {
@@ -413,15 +411,16 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
   control.file.number <- 1
   script.name <- paste(script.name, "_", ID, script.extension, 
                        sep = "")
-  dates.and.times <- laply(.data = dates, .fun = function(d) {
-    start.day <- paste(d, start.hour, sep = " ")
-    end.day <- paste(d, end.hour, sep = " ")
-    posix.date <- seq(as.POSIXct(start.day, tz), as.POSIXct(end.day, 
-                                                            tz), by = paste(hour.interval, "hour", sep = " "))
+  dates.and.times <- laply(.data = datetimes, .fun = function(d) {
+     # start.day <- paste(d[[1]], start.hour, sep = " ")
+     # end.day <- paste(d[[1]], end.hour, sep = " ")
+     posix.date <- as.POSIXct(paste0(d[[1]], " ", d[[2]], ":", d[[3]]), tz = TZ)
+     # posix.date <- seq(as.POSIXct(start.day, tz), as.POSIXct(end.day, 
+                                                            # tz), by = paste(hour.interval, "hour", sep = " "))
     as.character(posix.date)
   })
   dates.and.times <- unique(dates.and.times)
-  hour.interval <- paste(hour.interval, "hour", sep = " ")
+  # hour.interval <- paste(hour.interval, "hour", sep = " ")
   for (i in 1:length(dates.and.times)) {
     control.file <- "CONTROL"
     date <- as.POSIXct(dates.and.times[i], tz = tz)
@@ -479,16 +478,8 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
     }
     control.file.number <- control.file.number + 1
   }
-  traj <- tryCatch(
-    {
-      ReadFilesMod(process.working.dir, ID, dates.and.times, 
-                   tz, lubridate::year(dates))
-    }, error = function(err){
-      print(err)
-      print("ERROR: ReadfilesMod failed to read HYSPLIT output file")
-      return(0)
-    }
-  )
+  traj <- ReadFilesMod(process.working.dir, ID, dates.and.times, 
+              tz, lubridate::year(dates.and.times))
   
   if (add.new.column == T) {
     if (!missing(new.column.name) & !missing(new.column.value)) {
@@ -503,7 +494,6 @@ ProcTrajMod = function (lat = 51.5, lon = -45.1, hour.interval = 1, name = "lond
     save(traj, file = file.name)
   }
   setwd(hy.split.wd)
-  
   if (clean.files == T) {
     unlink(folder.name, recursive = TRUE)
   }
@@ -549,38 +539,28 @@ get_met_files = function(datesList) {
 }
 
 # Function to run the trajectories with the dates from a list
-compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, duration, h) {
+compute_trajectories = function(datesList, latlon, hy_path.=hy_path, duration, h) {
+  timezone = attr(datesList[[1]][[1]], "tzone")
   for (coordinate in latlon) {
     for (altitude in h) {
-      for (i in 1:length(datesList)) {
-        run_hour = paste(datesList[[i]][[2]], datesList[[i]][[3]], sep = ":")
-        
-        if(opt$verbose){
-          print(paste0("Computing trajectory for ", as.character(as.Date(datesList[[i]][[1]])), " at ", 
-                       as.character(run_hour), " at altitude of ", as.character(altitude), 
-                       " and coordinates of ", as.character(coordinate[1]), ",", as.character(coordinate[2])))
-        }
-        
+        # run_hour = paste(datesList[[i]][[2]], datesList[[i]][[3]], sep = ":")
         CurrentTraj <- tryCatch({
           ProcTrajMod(lat = coordinate[1], lon = coordinate[2],
-                      hour.interval = hourInt, 
-                      name = "traj", start.hour = run_hour, 
-                      end.hour = run_hour, 
+                      # hour.interval = hourInt, 
+                      name = "traj",
+                      # start.hour = run_hour, 
+                      # end.hour = run_hour, 
                       met = paste0(hy_path, "working/"), 
                       out = paste0(hy_path, "working/Out_files/"), 
                       hours = duration, height = altitude, 
                       hy.path = hy_path, 
-                      dates = as.Date(datesList[[i]][[1]]), 
-                      tz = attr(datesList[[i]][[1]], "tzone"),
+                      datetimes = datesList, 
+                      tz = TZ, 
+                        # attr(datesList[[i]][[1]], "tzone"),
                       ID = opt$run_id)
         }, error = function(err){
           print(err)
-          print(paste("Unexpected error when running date:", 
-                      as.Date(datesList[[i]][[1]]), "at", as.character(run_hour), 
-                      "at an altitude of", as.character(altitude),
-                      "meteres and coordinates of",
-                      as.character(coordinate[1]), as.character(coordinate[2]), 
-                      ". Please revise that date manually."))
+          print(paste("Unexpected error when running date:", as.Date(datesList[[i]][[1]]), run_hour, lat, lon, ". Please revise that date manually."))
           return(0)
         }
         )
@@ -615,7 +595,6 @@ compute_trajectories = function(datesList, latlon, hourInt, hy_path.=hy_path, du
             merged_trajs <- CurrentTraj
           }
         }
-      }
     } 
   }
   return(merged_trajs)
@@ -1197,7 +1176,7 @@ if ("rescue" %!in% names(opt)){
   #### Calculate trajectories ####
   if(opt$verbose){print("Starting trajectory calculations. Please wait...")}
   
-  trajs <- lapply(X=blocks_list, FUN = compute_trajectories, hourInt = 1, 
+  trajs <- lapply(X=blocks_list, FUN = compute_trajectories, 
                   latlon = coord, h = height, duration = duration)
   
   #### Rasterize trajectories ####
