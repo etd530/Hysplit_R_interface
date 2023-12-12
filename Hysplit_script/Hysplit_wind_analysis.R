@@ -572,7 +572,8 @@ compute_trajectories = function(datesList, latlon, hy_path.=hy_path, duration, h
               lat2 = CurrentTraj$lat[i+1]
               lon1 = CurrentTraj$lon[i]
               lon2 = CurrentTraj$lon[i+1]
-              dist = sqrt((lat2-lat1)**2 + ((lon2-lon1)*cos(0.5*(lat2+lat1)))**2)*111000
+              # dist = sqrt((lat2-lat1)**2 + ((lon2-lon1)*cos(0.5*(lat2+lat1)))**2)*111000
+              dist = pointDistance(cbind(lon1, lat1), c(lon2, lat2), lonlat = T)
               speed_fwd = dist/3600.0
             } else {
               speed_fwd = NA
@@ -582,7 +583,8 @@ compute_trajectories = function(datesList, latlon, hy_path.=hy_path, duration, h
               lat2 = CurrentTraj$lat[i]
               lon1 = CurrentTraj$lon[i-1]
               lon2 = CurrentTraj$lon[i]
-              dist = sqrt((lat2-lat1)**2 + ((lon2-lon1)*cos(0.5*(lat2+lat1)))**2)*111000
+              # dist = sqrt((lat2-lat1)**2 + ((lon2-lon1)*cos(0.5*(lat2+lat1)))**2)*111000
+              dist = pointDistance(cbind(lon1, lat1), c(lon2, lat2), lonlat = T)
               speed_bwd = dist/3600.0
             } else {
               speed_bwd = NA
@@ -904,9 +906,11 @@ plot_altitudinal_profile = function(trajs){
                                         group = start_height, 
                                         color = factor(start_height))) +
     geom_ribbon(aes(ymin = mean_minus_SE, ymax = mean_plus_SE, 
-                    group = start_height, fill = factor(start_height),
-                    alpha = 0.5)) +
+                    group = start_height, fill = factor(start_height)),
+                    alpha = 0.5) +
+    guides(fill = "none") +
     xlim(0, max(abs(duration)))
+  print(alt_plot)
 }
 
 # Modified version of AddMetFiles from opentraj (not used right now)
