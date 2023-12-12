@@ -807,11 +807,12 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
       if(length(height)>1){
         windrose = ggplot(data=trajs, aes(x=angle, y=stat(count/sum(count)), group=start_height,
                                           fill=start_height)) +
-          geom_histogram(aes(y = stat(count/sum(count))), bins = 360) +
+          geom_histogram(aes(y = stat(count/sum(count))), bins = 4) +
           coord_polar(start = 0, clip = "off") +
           ggtitle(paste0("Wind directions ", minDate, " to ", maxDate, " (all time points)")) +
           scale_fill_viridis(discrete = T, alpha = 1) +
-          scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
+          scale_x_continuous(breaks = c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
+          scale_y_continuous(limits = c(-0.2, 0.3)) +
           theme(plot.title = element_text(hjust = 0.5))
         print(windrose) 
       }
