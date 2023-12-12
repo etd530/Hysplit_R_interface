@@ -927,9 +927,11 @@ plot_altitudinal_profile = function(trajs){
                                         group = start_height, 
                                         color = factor(start_height))) +
     geom_ribbon(aes(ymin = mean_minus_SE, ymax = mean_plus_SE, 
-                    group = start_height, fill = factor(start_height),
-                    alpha = 0.5)) +
+                    group = start_height, fill = factor(start_height)),
+                    alpha = 0.5) +
+    guides(fill = "none") +
     xlim(0, max(abs(duration)))
+  print(alt_plot)
 }
 
 # Modified version of AddMetFiles from opentraj (not used right now)
