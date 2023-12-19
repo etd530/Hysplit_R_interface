@@ -790,7 +790,7 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
   
   # Build windrose histograms
   # turn starting height into factor
-  trajs$start_height <- factor(trajs$start_height, levels = unique(as.character(sort(trajs$start_height, decreasing = T))))
+  trajs$start_height <- factor(trajs$start_height, levels = unique(as.character(sort(trajs$start_height, decreasing = F))))
   
   # Create color palette
   color = viridis(n = length(unique(trajs$start_height)), begin=0)
@@ -918,8 +918,8 @@ plot_altitudinal_profile = function(trajs){
   alt_plot <- ggplot(data = mean_SE_trajs, aes(x = abs(hour.inc), y = mean_height)) +
     #geom_point(aes(color = factor(start_height)), shape = 17, size = 3) +
     ggtitle(paste0("Trajectory altitude profile from ", minDate, "\nto ", maxDate, ", ", direction, " ", abs(duration), " hours")) +
-    scale_color_viridis(begin = 1, end = 0, discrete = T, alpha = 1) +
-    scale_fill_viridis(begin = 1, end = 0, discrete = T, alpha = 0.25) + 
+    scale_color_viridis(begin = 0, end = 1, discrete = T, alpha = 1) +
+    scale_fill_viridis(begin = 0, end = 1, discrete = T, alpha = 0.25) + 
     ylab("Altitude (m AGL)") +
     xlab("Hours before observation") +
     theme(plot.title = element_text(hjust = 0.5)) + labs(color = "Start height") +
