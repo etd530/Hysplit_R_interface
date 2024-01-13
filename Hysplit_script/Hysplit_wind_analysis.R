@@ -63,6 +63,7 @@ library(rworldmap)    # to get the background map
 library(rworldxtra)   # to get the background map
 library(doParallel)     # to manage the cores used
 library(parallel)     # to manage the cores used
+# library(prettymapr)
 
 #### ARGS ####
 option_list = list(
@@ -750,7 +751,7 @@ plot_trajlines = function(trajs, PRJ){
   }
   
   # Make color palette
-  color_list = viridis(n=length(unique(trajs$start_height)), begin=0, alpha = 0.25)
+  color_list = viridis(n=length(unique(trajs$start_height)), begin=1, end = 0, alpha = 0.25)
   names(color_list) = unique(trajs$start_height)
   color_palette <- vector()
   for (traj_height in traj_lines_df$start_height){
@@ -766,6 +767,9 @@ plot_trajlines = function(trajs, PRJ){
   
   legend(bb[1,1], bb[2,2], legend = unique(trajs$start_height), bg = "transparent",
          fill = color_list, title = "Starting altitude (m AGL)")
+  
+  # addscalebar(pos = "bottomleft")
+  # addscalebar(pos = "topleft")
 }
 
 # Function to plot the windrose histograms (heights separated)
@@ -793,7 +797,7 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
   trajs$start_height <- factor(trajs$start_height, levels = unique(as.character(sort(trajs$start_height, decreasing = F))))
   
   # Create color palette
-  color = viridis(n = length(unique(trajs$start_height)), begin=0)
+  color = viridis(n = length(unique(trajs$start_height)), begin=1, end=0)
   
   # Get starting and ending dates
   minDate <- min(as_datetime(trajs$date[trajs$hour.inc==0]))
@@ -812,7 +816,7 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
           geom_histogram(aes(y = stat(count/sum(count))), bins = bin_number) +
           coord_polar(start = 0, clip = "off") +
           ggtitle(paste0("Wind directions ", minDate, " to ", maxDate, " (all time points)")) +
-          scale_fill_viridis(discrete = T, alpha = 1) +
+          scale_fill_viridis(discrete = T, alpha = 1, begin = 1, end = 0) +
           scale_x_continuous(breaks = c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           scale_y_continuous(limits = c(lower_ylim, NA)) +
           theme(plot.title = element_text(hjust = 0.5))
@@ -847,7 +851,7 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
           geom_histogram(aes(y = stat(count/sum(count))), bins = bin_number) +
           coord_polar(start = 0, clip = "off") +
           ggtitle(paste0("Wind directions ", minDate, " to ", maxDate, " (", direction, " ", abs(d), "h)")) +
-          scale_fill_viridis(discrete = T, alpha = 1) +
+          scale_fill_viridis(discrete = T, alpha = 1, begin = 1, end = 0) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           scale_y_continuous(limits = c(lower_ylim, NA)) +
           theme(plot.title = element_text(hjust = 0.5))
@@ -860,7 +864,7 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
           geom_histogram(aes(y = stat(count/sum(count))), bins = bin_number, fill = color[h]) +
           coord_polar(start = 0, clip = "off") +
           ggtitle(paste0("Wind directions ", minDate, " to ", maxDate, " \n(", direction, " ", abs(d), "h, ", height[h], "m AGL)")) +
-          scale_fill_viridis(discrete = T, alpha = 1) +
+          scale_fill_viridis(discrete = T, alpha = 1, begin = 1, end = 0) +
           scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
           scale_y_continuous(limits = c(lower_ylim, NA)) +
           theme(plot.title = element_text(hjust = 0.5))
@@ -918,8 +922,8 @@ plot_altitudinal_profile = function(trajs){
   alt_plot <- ggplot(data = mean_SE_trajs, aes(x = abs(hour.inc), y = mean_height)) +
     #geom_point(aes(color = factor(start_height)), shape = 17, size = 3) +
     ggtitle(paste0("Trajectory altitude profile from ", minDate, "\nto ", maxDate, ", ", direction, " ", abs(duration), " hours")) +
-    scale_color_viridis(begin = 0, end = 1, discrete = T, alpha = 1) +
-    scale_fill_viridis(begin = 0, end = 1, discrete = T, alpha = 0.25) + 
+    scale_color_viridis(begin = 1, end = 0, discrete = T, alpha = 1) +
+    scale_fill_viridis(begin = 1, end = 0, discrete = T, alpha = 0.25) + 
     ylab("Altitude (m AGL)") +
     xlab("Hours before observation") +
     theme(plot.title = element_text(hjust = 0.5)) + labs(color = "Start height") +
