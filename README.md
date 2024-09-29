@@ -40,7 +40,7 @@ one may wish to run trajectories at October 22nd 2013 at 06:00h, October 22nd 20
 altitudes of 500, 1000 and 2000m AGL from coordinates (5.745974, -53.934047). In such case, the arguments `--from` and `--to` simply indicate the starting and ending times, and `--byhour 1` indicates that we want one trajectory per hour between those two time points:
 
 ```
-./Hysplit_wind_analysis_dev.R --from 2013-10-22-06-00 --to 2013-10-25-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --byhour 1
+./Hysplit_wind_analysis.R --from 2013-10-22-06-00 --to 2013-10-25-06-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --byhour 1
 ```
 
 First of all, the program will download any necessary meteorological files from the NOAA's servers. For large runs, this can take some time, so please be patient. 
@@ -73,7 +73,7 @@ Instead of being interested in a single, "continuous" set of trajectories, one m
 one may want to compute trajectories for all hours between 10:00 and 18:00 from days 1st to 10th of April, May and June, for years 2000 to 2022. In this case, we have a smaller sequence (from 10:00 to 18:00 by one hour) that then repeats in a larger one (from 1st to 10th day of the month, by one day), then another one (from April to June, month by month) and finally another one (from 2000 to 2002, year by year). To do this, the arguments `--from` and `--to` need to indicate, respectively, the smaller and larger element of each of the sequences, and then we indicate the step size with the arguments `byhour`, `byday`, `bymonth` and `byyear`:
 
 ```
-./Hysplit_wind_analysis_dev.R --from 2000-04-01-10-00 --to 2002-06-10-18-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --byyear 1 --bymonth 1 --byday 1 --byhour 1
+./Hysplit_wind_analysis.R --from 2000-04-01-10-00 --to 2002-06-10-18-00 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -24 --byyear 1 --bymonth 1 --byday 1 --byhour 1
 ```
 
 <img src="https://user-images.githubusercontent.com/85890746/187041780-a2c2ca5c-2340-4ae5-bb93-45c993bdb026.png" width="400">  
