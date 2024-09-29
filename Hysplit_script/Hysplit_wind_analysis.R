@@ -1188,6 +1188,10 @@ if ("rescue" %!in% names(opt)){
 
 
   #### Calculate trajectories ####
+  # First create the Out_files directory if it does not exist
+  dir.create(paste0(hy_path, "working/Out_files"), showWarnings = F)
+  
+  # Now compute
   if(opt$verbose){print("Starting trajectory calculations. Please wait...")}
   
   trajs <- lapply(X=blocks_list, FUN = compute_trajectories, 
@@ -1242,7 +1246,7 @@ if (!opt$no_plots) {
 #### Save image of data (only ir not rescuing previous RData)####
 if("rescue" %!in% names(opt)){
   if(opt$verbose) {
-    cat(paste0("All R objects saved to ", outfile,".RData"))
+    cat(paste0("All R objects saved to ", outfile,".RData\n"))
   }
   rm(opt) # this is needed, otherwise when rescuing RData all flags will be overwritten by the previous ones and plots won't change
   save.image(paste0(outfile,".RData"))
