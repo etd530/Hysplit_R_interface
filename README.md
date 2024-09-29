@@ -4,7 +4,7 @@
 [Installation](#installation)  
 [How to run the program](#running)  
 [Troubleshooting](#troubleshooting)  
-
+[Citation](#citation)  
 
 This code contains an R program that calls [HYSPLIT](https://www.arl.noaa.gov/hysplit/) trajectory model to obtain wind trajectories, allowing to automate the 
 calculation of large numbers of trajectories, and produces different types of plots summarizing the results of the different runs.
@@ -92,3 +92,11 @@ If downloading the files is giving problems, you may also try to download them (
 for ((year=1948; year<2023; year++)); do for month in 01 02 03 04 05 06 07 08 09 10 11 12; do wget ftp://ftp.arl.noaa.gov/pub/archives/reanalysis/RP${year}${month}.gbl; done; done
 ```
 This will download the entire Reanalysis database from 1948 to 2022, but you may adjust this to download only the files you need. Note that **the full database until 2022 takes about 102GB of disk space**.
+
+<a name="citation"/>
+
+## Citation  
+If you use this program please cite at least one of these articles:  
+- Suchan, T., Bataille, C.P., Reich, M.S. et al. A trans-oceanic flight of over 4,200 km by painted lady butterflies. _Nature Communications_ 15: 5205 (2024). https://doi.org/10.1038/s41467-024-49079-2  
+- Menchetti, M., Schifani, E., Alicata, A., Cardador, L., Sbrega, E., Toro-Delgado, E., Vila, R. The invaisve ant _Solenopsis invicta_ is established in Europe. _Current Biology_ 33(17): PR896-R897 (2023). https://doi.org/10.1016/j.cub.2023.07.036  
+- Jamonneau, T., Toro-Delgado, E., Vila, R. Primer registre de _Vanessa virginiensis_ (Drury, 1773) a Catalunya. _Butlletí de la Societat Catalana de Lepidopterologia_ 14: 21-25.  
