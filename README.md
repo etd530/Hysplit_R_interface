@@ -63,6 +63,8 @@ The next output are circular histogram, indicating the proportion of trajectorie
 
 <img src="https://user-images.githubusercontent.com/85890746/187039811-fa26baaf-0122-4e5e-8663-427afe428146.png" width="400">  
 
+In a set of forwards trajectories, the histogram indicates the positions at which the winds starting from the point of origin arrived after the indicated number of hours. In a set of backwards trajectories, the histogram indicates the positions from which the winds arriving to the point of origin started.
+
 Lastly, an "altitudinal profile" plot is provided, which indicates the mean height (± standard error) of each group of trajectories at the different hours of the duration
 of the run:
 
