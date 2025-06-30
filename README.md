@@ -11,12 +11,17 @@ calculation of large numbers of trajectories, and produces different types of pl
 
 <a name="installation"/>
 
-## Installation
+## Installation  
 Although the program itself does not require installation *per se*, you will need to have a local installation of HYSPLIT (available [here](https://www.ready.noaa.gov/HYSPLIT.php)) 
 in order to use it. In addition, there are a number of R depenencies that will be required and, to ensure compatibility **it is recommended to use R 4.1.2**.
 
-Therefore, it is recommended to first **install R 4.1.2 and HYSPLIT**. We recommend [following these instructions](https://docs.posit.co/resources/install-r/) if you need to have multiple R versions in a single machine. Then, **clone this repository** using `git` and open the R Project. The R `renv` package will automatically install itself. After it has finished, all other dependencies can be installed by **running `renv::restore()` in the R console**. You also need to open the R script and change the following:
-- Change the shebang (the first line in the script) so that it points to you local installation of R 4.1.2. If you followed the recommended instructions [here]((https://docs.posit.co/resources/install-r/)), that should be `/opt/R/4.1.2/bin/Rscript`.
+Therefore, it is recommended to first **install R 4.1.2 and HYSPLIT**. We recommend installing R through Conda/Mamba as follows:
+```
+mamba create -n hysplit_r_interface && conda activate hysplit_r_interface
+mamba install -c conda-forge r-base=4.1.2
+```
+
+Afterwards, **clone this repository** using `git` and open the R Project. The R `renv` package will automatically install itself. After it has finished, all other dependencies can be installed by **running `renv::restore()` in the R console**. You also need to open the R script using any text editor and change the following:
 - Change the first variable (`hy_path`) so that it specifies the path to your local installation of HYSPLIT.
 - Change the paths in `.libPaths()` and `Sys.setenv()` to point to the R library created by `renv`. This will be within the `renv/library/` folder located inside this repository.
 

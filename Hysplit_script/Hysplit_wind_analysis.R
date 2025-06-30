@@ -47,6 +47,10 @@
 # test 7: single trajectory at October 28th 1948, 06:00, at 1000 masl, 10 hours backwards. The aim is to make sure a bug in parsing years has been fixed
 #./Hysplit_wind_analysis_dev.R --from 1948-10-28-06-00 --to 1948-10-28-06-00 --lat 5.745974 --lon -53.934047 --altitude 1000 --duration -10 --out test_7.pdf --byyear 0 --bymonth 0 --byday 0 --byhour 0 --verbose --windrose_times '-10'
 
+#### Options ####
+# To show lines where errors occur
+options(show.error.locations = TRUE)
+
 #### Load packages ####
 .libPaths("/home/etode/Documents/Hysplit_R_interface/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
 Sys.setenv("R_LIBS_USER"="/home/etode/Documents/Hysplit_R_interface/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
@@ -99,9 +103,9 @@ option_list = list(
   make_option(c("l", "--lon"), type = "double", default = NULL,
               help = "Longidute of the starting point of the trajecotries", metavar = "double"),
   
-  make_option(c("-a", "--altitude"), type = "integer", default = NULL,
+  make_option(c("-a", "--altitude"), type = "character", default = NULL,
               help = "Altitude (in meters above sea level) at which each trajectory will start",
-              metavar = "integer"),
+              metavar = "character"),
   
   make_option(c("-z", "--timezone"), type = "character", default = "GMT",
               help = "Time zone to use", metavar = "character"),
@@ -134,8 +138,8 @@ option_list = list(
               help = "Resolution to use to make the raster maps",
               metavar = "integer"),
   
-  make_option(c("-c", "--cores"), type = "integer", default = 0,
-              help = "Number of cores to use for parallel computing. If not set, will use all cores.",
+  make_option(c("-c", "--cores"), type = "integer", default = 1,
+              help = "Number of cores to use for parallel computing. If not set, will use a single cores.",
               metavar = "integer"),
   
   make_option(c("--no_raster"), type = "logical", default = FALSE, action="store_true",
@@ -633,12 +637,8 @@ RasterizeTrajMod = function (spLines, resolution = 10000, reduce = TRUE, paralle
     rast
   }
   ext <- extent(spLines)
-  if (parallel == TRUE) {
-    if (coreNum){
-      cores <- coreNum
-    } else {
-      cores <- detectCores()
-    }
+  if (parallel == TRUE & coreNum > 1) {
+    cores <- coreNum
     list.splines <- SplitSpLines(spLines, cores)
     cl <- makeCluster(cores)
     registerDoParallel(cl)
@@ -690,8 +690,8 @@ rasterize_trajectories = function(trajs, height, PRJ, resolution){
       parallelize = TRUE
     }
     # Get the raster
-    traj_freq<- RasterizeTrajMod(traj_lines, parallel = parallelize, resolution = resolution, coreNum = coreNum)
-    
+    traj_freq <- RasterizeTrajMod(traj_lines, parallel = parallelize, resolution = resolution, coreNum = coreNum)
+
     # Change the absolute number of trajectories to relative number (i.e. from 0 to 1)
     max.val <- maxValue(traj_freq)        #gets the max value of the raster
     v <- getValues(traj_freq)             #gets all values of the raster
@@ -869,6 +869,76 @@ plot_windrose_hist = function(trajs, height, duration=Inf){
   return(trajs)
 }
 
+# Function to plot polar plots of wind directions and covered distances
+plot_polar_dist = function(trajs, height, duration = Inf){
+  # Helper function to plot polar plot of wind directions
+  polar_plot = function(df, fill_col = NA, d, h){
+          windrose = ggplot(data=df, aes(x=angle, y=dist)) +
+          coord_polar(start = 0, clip = "off") +
+          geom_segment(aes(y=0, xend=angle, yend=dist), arrow=arrow(length=unit(0.3,"cm")), color = fill_col) +
+          ggtitle(paste0("Trajectory directions and distances, ", minDate, " to ", maxDate, 
+                  " \n(", direction, " ", abs(d), "h, ", height[h], "m AGL)")) +
+          scale_fill_viridis(discrete = T, alpha = 1, begin = 1, end = 0) +
+          scale_x_continuous(breaks =c(0, 90, 180, 270) , limits = c(0, 360), labels = c("N", "E", "S", "W")) +
+          scale_y_continuous(limits = c(lower_ylim, NA)) +
+          theme(plot.title = element_text(hjust = 0.5))
+  return(windrose)
+  }
+
+  # Get starting coordinates
+  coord <- c(unique(trajs$lat[trajs$hour.inc==0]), unique(trajs$lon[trajs$hour.inc==0]))
+  
+  # Calculate distance from origin and angle relative to origin for each trajectory position
+  trajs$dist <- pointDistance(cbind(trajs$lon, trajs$lat), c(coord[2], coord[1]), lonlat = T)
+  trajs$angle <- bearing(c(coord[2], coord[1]), cbind(trajs$lon, trajs$lat))
+  
+  #take out values for the starting points, which are still at the origin so distance is zero and it makes no sense to calculate an angle
+  trajs$dist[trajs$hour.inc==0] <- NA
+  trajs$angle[trajs$hour.inc==0] <- NA
+  
+  #add 360 to negative azimuths
+  for (ang in 1:length(trajs$angle)) {
+    if (!is.na(trajs$angle[ang]) & (trajs$angle[ang] < 0)) {
+      trajs$angle[ang] <- trajs$angle[ang] + 360
+    }
+  }
+  
+  # Build windrose histograms
+  # turn starting height into factor
+  trajs$start_height <- factor(trajs$start_height, levels = unique(as.character(sort(trajs$start_height, decreasing = F))))
+  
+  # Create color palette
+  color = viridis(n = length(unique(trajs$start_height)), begin=1, end=0)
+  
+  # Get starting and ending dates
+  minDate <- min(as_datetime(trajs$date[trajs$hour.inc==0]))
+  maxDate <- max(as_datetime(trajs$date[trajs$hour.inc==0]))
+  
+  # Make plot for each user-specified time point (Inf meaning include all time points of the trajectory)
+  lower_ylim = -0.1
+  for (d in duration) {
+    # Ensure the provided duration is not larger than the maximum duration of the runs
+    if(abs(d) > max(abs(trajs$hour.inc))) {
+      print("WARNING: Provided hour for windrose histogram is larger than the duration of the runs and thus will be skipped")
+    } else {
+      # check if trajectories are backwards or forwards to make plot titles accordingly
+      if(d < 0){
+        direction <- "backwards"
+      } else {
+        direction <- "forwards"
+      }
+      
+      # Plot for each starting height
+      for (h in 1:length(height)){
+        data_subset <- trajs[trajs$hour.inc == d & trajs$start_height == height[h],]
+        windrose = polar_plot(data_subset, fill_col = color[h], d, h)
+        plot(windrose)
+      }
+    }
+  }
+  return(trajs)
+}
+
 # Function to plot the altitudinal profile plot
 plot_altitudinal_profile = function(trajs){
   # Create dataframe to store summary statistics of the trajectories
@@ -960,8 +1030,7 @@ AddMetFilesMod = function (month, Year, met, script.file, control.file)
 }
 
 # Modified version of ReadFiles from opentraj to fix bug in inferring year from HYSPLIT's output
-ReadFilesMod = function (working_dir, ID, dates, tz, year) 
-{
+ReadFilesMod = function (working_dir, ID, dates, tz, year) {
   combine.file.name <- paste("Rcombined_", ID, ".txt", sep = "")
   dump.file.name <- paste("tdump_", ID, "_", "*", sep = "")
   files <- list.files(path = working_dir, pattern = paste("tdump_", 
@@ -1243,14 +1312,14 @@ if (!opt$no_plots) {
   if(opt$verbose){print("Plotting trajectories...")}
   lapply(X=trajs, FUN = plot_trajlines, PRJ = PRJ)
   
-  
-  
-  
   #### Plot windrose histograms ####
   if(opt$verbose){print("Plotting windrose histograms...")}
   trajs <- lapply(X = trajs, FUN = plot_windrose_hist, height = height, duration = windrose_times)
   
-  
+  #### Plot polar plots of wind directions and distances ####
+  if(opt$verbose){print("Plotting polar plots of covered distances...")}
+  trajs <- lapply(X = trajs, FUN = plot_polar_dist, height = height, duration = windrose_times)
+
   #### Plot altitudinal profile plots ####
   if(opt$verbose){print("Plotting altitudinal profiles...")}
   lapply(X = trajs, FUN = plot_altitudinal_profile)
