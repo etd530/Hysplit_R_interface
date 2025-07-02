@@ -13,17 +13,16 @@ calculation of large numbers of trajectories, and produces different types of pl
 
 ## Installation  
 Although the program itself does not require installation *per se*, you will need to have a local installation of HYSPLIT (available [here](https://www.ready.noaa.gov/HYSPLIT.php)) 
-in order to use it. In addition, there are a number of R depenencies that will be required and, to ensure compatibility **it is recommended to use R 4.1.2**.
+in order to use it. In addition, it is recommended to use R 4.1.2. **Installation through Conda/Mamba is recommended**:
 
-Therefore, it is recommended to first **install R 4.1.2 and HYSPLIT**. We recommend installing R through Conda/Mamba as follows:
 ```
-mamba create -n hysplit_r_interface && conda activate hysplit_r_interface
-mamba install -c conda-forge r-base=4.1.2
+# First navigate to the folder where you want to place the code
+git clone https://github.com/etd530/Hysplit_R_interface/
+cd Hysplit_R_interface/Hysplit_script
+mamba env create -f hysplit_r_interface.yml
 ```
 
-Afterwards, **clone this repository** using `git` and open the R Project. The R `renv` package will automatically install itself. After it has finished, all other dependencies can be installed by **running `renv::restore()` in the R console**. You also need to open the R script using any text editor and change the following:
-- Change the first variable (`hy_path`) so that it specifies the path to your local installation of HYSPLIT.
-- Change the paths in `.libPaths()` and `Sys.setenv()` to point to the R library created by `renv`. This will be within the `renv/library/` folder located inside this repository.
+This will install the required version of R and all its dependencies. You also need to open the `Hysplit_wind_analysis.R` R script using any text editor and change the first variable (`hy_path`) so that it specifies the path to your local installation of HYSPLIT.
 
 <a name="running"/>
 

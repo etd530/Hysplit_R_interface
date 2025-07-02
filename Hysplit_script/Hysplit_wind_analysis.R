@@ -1,4 +1,4 @@
-#!/opt/R/4.1.2/bin/Rscript
+#!/usr/bin/env Rscript
 
 # This example not working now!
 #"C:\Program Files\R\R-4.1.2\bin\Rscript.exe" Hysplit_wind_analysis_dev.R --from 22102013_06:00 --to 25102013_06:00 --dayblocks 22:25 --lat 5.745974 --lon -53.934047 --altitude 500,1000,2000 --duration -200 --out test_Guyana.pdf --byhour 1 --verbose
@@ -52,22 +52,22 @@
 options(show.error.locations = TRUE)
 
 #### Load packages ####
-.libPaths("/home/etode/Documents/Hysplit_R_interface/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
-Sys.setenv("R_LIBS_USER"="/home/etode/Documents/Hysplit_R_interface/Hysplit_script/renv/library/R-4.1/x86_64-pc-linux-gnu")
-library(splitr)       # to work with Hysplit (to download files mostly)
-library(opentraj)     # to work with Hysplit (does the calculations and plotting)
 library(lubridate)    # for parsing dates
 library(ggplot2)      # plotting library
 library(raster)       # needed for the lines that change the raster values, from maxValue until setValues, and for pointDistance()
 library(geosphere)    # needed for bearing()
 library(viridis)      # colorblind-friendly color palettes
 library(plyr)         # diverse useful functions
+library(dplyr)        # to be able to use the pipe %>% operator
+library(downloader)   # to download files from the internet
 library(optparse)     # Nice argument parsing
 library(rworldmap)    # to get the background map
 library(rworldxtra)   # to get the background map
 library(doParallel)   # to manage the cores used
 library(parallel)     # to manage the cores used
 library(circular)     # to work with circular data
+library(maptools)     # to work with maps
+library(sf)           # to work with maps
 # library(prettymapr)
 
 #### ARGS ####
@@ -540,6 +540,104 @@ remove_missing_dates = function(dateList) {
   return(dateList)
 }
 
+# Function from splitr to format months
+to_short_month <- function(date) {
+
+  formatC(
+    date %>% lubridate::month(),
+    width = 2, flag = "0"
+  )
+}
+
+# Function from splitr to get monthly filenames
+get_monthly_filenames <- function(days,
+                                  duration,
+                                  direction,
+                                  prefix = NULL,
+                                  extension = NULL) {
+  # Determine the minimum month (as a `Date`) for the model run
+  if (direction == "backward") {
+    min_month <-
+      (lubridate::as_date(days) - (duration / 24) - lubridate::days(1)) %>%
+      min() %>%
+      lubridate::floor_date(unit = "month")
+  } else if (direction == "forward") {
+    min_month <-
+      (lubridate::as_date(days)) %>%
+      min() %>%
+      lubridate::floor_date(unit = "month")
+  }
+
+  # Determine the maximum month (as a `Date`) for the model run
+  if (direction == "backward") {
+    max_month <-
+      (lubridate::as_date(days)) %>%
+      max() %>%
+      lubridate::floor_date(unit = "month")
+  } else if (direction == "forward") {
+    max_month <-
+      (lubridate::as_date(days) + (duration / 24) + lubridate::days(1)) %>%
+      max() %>%
+      lubridate::floor_date(unit = "month")
+  }
+
+  met_months <- seq(min_month, max_month, by = "1 month")
+
+  months_short <- met_months %>% to_short_month()
+
+  years_long <- lubridate::year(met_months)
+
+  paste0(prefix, years_long, months_short, extension)
+}
+
+# Function from splitr to download meteorological files
+splitr_get_met_files <- function(files, path_met_files, ftp_dir) {
+
+  # Determine which met files are already locally available
+  files_in_path <- list.files(path_met_files)
+
+  # Download list of GFS0.25 met files by name
+  if (!is.null(files)) {
+
+    for (file in files) {
+
+      if (!(file %in% files_in_path)) {
+
+        downloader::download(
+          url = file.path(ftp_dir, file),
+          destfile = path.expand(file.path(path_met_files, file)),
+          method = "auto",
+          quiet = FALSE,
+          mode = "wb",
+          cacheOK = FALSE
+        )
+      }
+    }
+  }
+
+  files
+}
+
+# Function from splitr to download reanalsysis files from the ARL FTP server
+get_met_reanalysis <- function(days,
+                               duration,
+                               direction,
+                               path_met_files) {
+  
+  get_monthly_filenames(
+    days = days,
+    duration = duration,
+    direction = direction,
+    prefix = "RP",
+    extension = ".gbl"
+  ) %>%
+    splitr_get_met_files(
+      path_met_files = path_met_files,
+      ftp_dir = "ftp://arlftp.arlhq.noaa.gov/archives/reanalysis"
+    )
+}
+
+
 # Function to download meteorological files
 get_met_files = function(datesList) {
   for (i in 1:length(datesList)) {
@@ -664,7 +762,6 @@ RasterizeTrajMod = function (spLines, resolution = 10000, reduce = TRUE, paralle
   }
 }
 
-
 # Function to rasterize the trajectories
 rasterize_trajectories = function(trajs, height, PRJ, resolution){
   traj_grids <- list()
@@ -753,7 +850,7 @@ plot_trajlines = function(trajs, PRJ){
   }
   
   # Plot
-  PlotBgMap(traj_lines_df, xlim = bb[1, ], ylim = bb[2, ], axes = TRUE)
+  PlotBgMapMod(traj_lines_df, xlim = bb[1, ], ylim = bb[2, ], axes = TRUE)
   plot(traj_lines_df, col = color_palette, add = T)
   
   title(main = paste0(min(as_datetime(trajs$date[trajs$hour.inc==0])), " to ", max(as_datetime(trajs$date[trajs$hour.inc==0]))),
@@ -1050,7 +1147,7 @@ ReadFilesMod = function (working_dir, ID, dates, tz, year) {
   traj <- read.table(file.path(working_dir, combine.file.name), 
                      header = FALSE)
   traj <- subset(traj, select = -c(2, 7, 8))
-  traj <- rename(traj, c(V1 = "receptor", V3 = "year", V4 = "month", 
+  traj <- plyr::rename(traj, c(V1 = "receptor", V3 = "year", V4 = "month", 
                          V5 = "day", V6 = "hour", V9 = "hour.inc", V10 = "lat", 
                          V11 = "lon", V12 = "height", V13 = "pressure"))
   traj$year <- year
@@ -1060,10 +1157,124 @@ ReadFilesMod = function (working_dir, ID, dates, tz, year) {
   traj
 }
 
+# Function from OpenTraj to convert a dataframe to a SpatialLines object
+Df2SpLines = function( df, crs=NA )
+  {   
+    # This function converts an object of type data frame, calculated by the function
+    # ProcTraj, into an object of type Spatial Lines.
+    #
+    # Args:
+    #   df: Data Frame Object created by the function ProcTraj.
+    #   crs: String: Valid projection string. An example would be crs= "+proj=longlat +datum=NAD27"
+    #
+    # Results:
+    #  Returns an object of class SpatialLines.
+    
+    if( !is.na(crs) ){
+      crs <- CRS(crs)
+    }
+    
+    max.traj.length <- max(abs(df$hour.inc)) + 1
+    
+    if(nrow(df) %% max.traj.length != 0) {
+      stop("The number of rows in the 'df' argument is not a multiple of the length of an individual trajectory" )
+    }
+    
+    # create a traj ID column to identify each trajctory uniquely 
+    df['ID'] <- rep(1:(nrow(df) / max.traj.length), each=max.traj.length )
+    
+    CreateLines <- function(df) {
+      # get the coordinates out of the data.frame
+      cc <- df[7:8]
+      
+      # reverse the order of the columns from [Lat Long] to [Long Lat]
+      cc <- cc[, c(2, 1)]
+      
+      # create a individual line
+      line <- Line(cc)
+      
+      # transfor the line [line] into a Lines object and assign a unique ID
+      Lines(line, ID=as.character(df$ID[1]))  
+    }
+    
+    lines.list <- dlply( df, 'ID', CreateLines)
+    
+    sp.lines <- SpatialLines(lines.list, proj4string = crs)
+    
+    sp.lines
+  }
+
+# Function from OpenTraj to convert a dataframe to a SpatialLinesDataFrame object
+Df2SpLinesDf = function( spLines, df, add.distance=F, add.azimuth=F )
+{
+  # This function converts an object of class SpatialLines, calculated by the 
+  # function Df2SpLines, into an Object of class SpatialLinesDataFrame.
+  #
+  # Args:
+  #  spLines: Object of class SpatialLines calculated by the function Df2SpLines.
+  #  df: Data Frame Object created by the function ProcTraj.
+  #  add.distance: Logical: If True, it will calculate and include the distance in meters between the first and last point for every line.
+  #  add.azimuth: Logical: If True it will calculate and include the azimuth for every line.
+  
+  # Results:
+  #   Returns an object of class SpatialLinesDataFrame.
+  
+  # get the trajectory lenghth
+  # all trajectories have the same length
+  
+  max.traj.length <- max(abs(df$hour.inc)) + 1
+  
+  # create a traj ID column to identify each trajctory uniquely 
+  df['ID'] <- rep(1:(nrow(df) / max.traj.length), each=max.traj.length )
+  
+  # apply the function to each subgroup of the data frame
+  # the dataframe is divided in subgroups of equal IDs 
+  #(each trajectory has an unique ID)
+  # the function just get the fist line of each trajectory and returns 
+  # a data.frame with that information
+  data.list <- ddply(df, 'ID', function(df){ df[1,] }, .inform=TRUE)
+  
+  if(add.distance == T){
+    CalcDistance <- function( line ){ 
+      # get the coordinates of the point
+      cc <- as.data.frame(coordinates(line))
+      
+      # get the first and last pair of coordinates
+      cc <- cc[-c(2,3),]
+      
+      # calculate the distance between those two points
+      dist <- spDists(as.matrix(cc), longlat=TRUE)[1,2]
+    }
+    
+    data.list$distance <- sapply(slot(spLines, "lines"), FUN=CalcDistance)
+    data.list$distance <- data.list$distance * 1000
+  }
+  
+  if(add.azimuth==T){
+    CalcAzimuth <- function( line ){ 
+      # get the coordinates of the point
+      cc <- as.data.frame(coordinates(line))
+      
+      # get the first and last pair of coordinates
+      first.p <- as.matrix(cc[1,])
+      second.p <-  as.matrix(cc[nrow(cc),])
+      
+      # calculate the distance between those two points
+      gzAzimuth(first.p, second.p)
+    }
+    
+    data.list$azimuth <- sapply(slot(spLines, "lines"), FUN=CalcAzimuth)
+  }
+  
+  spLinesDataFrame <- SpatialLinesDataFrame(spLines, data = data.list)
+  
+  spLinesDataFrame
+}
+
 
 #### VARIABLES ####
 # path to hysplit installation
-hy_path <- "/home/etode/hysplit.v5.4.2_x86_64_public/"
+hy_path <- "/home/software/hysplit.v5.4.2_x86_64_public/"
 
 
 # name for output file
