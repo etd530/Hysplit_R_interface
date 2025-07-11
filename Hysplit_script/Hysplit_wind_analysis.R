@@ -50,6 +50,8 @@
 #### Options ####
 # To show lines where errors occur
 options(show.error.locations = TRUE)
+# Allow longer download times to prevent timout errors when downloading met files
+options(timeout = max(300, getOption("timeout")))
 
 #### Load packages ####
 library(lubridate)    # for parsing dates
@@ -972,7 +974,8 @@ plot_polar_dist = function(trajs, height, duration = Inf){
   polar_plot = function(df, fill_col = NA, d, h){
           windrose = ggplot(data=df, aes(x=angle, y=dist)) +
           coord_polar(start = 0, clip = "off") +
-          geom_segment(aes(y=0, xend=angle, yend=dist), arrow=arrow(length=unit(0.3,"cm")), color = fill_col) +
+          # geom_segment(aes(y=0, xend=angle, yend=dist), arrow=arrow(length=unit(0.3,"cm")), color = fill_col) +
+          geom_point(aes(y=dist, x=angle), color = fill_col, size = 1) +
           ggtitle(paste0("Trajectory directions and distances, ", minDate, " to ", maxDate, 
                   " \n(", direction, " ", abs(d), "h, ", height[h], "m AGL)")) +
           scale_fill_viridis(discrete = T, alpha = 1, begin = 1, end = 0) +
@@ -1274,7 +1277,7 @@ Df2SpLinesDf = function( spLines, df, add.distance=F, add.azimuth=F )
 
 #### VARIABLES ####
 # path to hysplit installation
-hy_path <- "/home/software/hysplit.v5.4.2_x86_64_public/"
+hy_path <- "/home/etd530/hysplit.v5.2.3_UbuntuOS20.04.4LTS_public/"
 
 
 # name for output file

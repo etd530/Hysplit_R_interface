@@ -12,8 +12,7 @@ calculation of large numbers of trajectories, and produces different types of pl
 <a name="installation"/>
 
 ## Installation  
-Although the program itself does not require installation *per se*, you will need to have a local installation of HYSPLIT (available [here](https://www.ready.noaa.gov/HYSPLIT.php)) 
-in order to use it. In addition, it is recommended to use R 4.1.2. **Installation through Conda/Mamba is recommended**:
+First of all, you will need to **install HYSPLIT** (available [here](https://www.ready.noaa.gov/HYSPLIT.php)). Afterwards, the pipeline can be installed using Conda/Mamba as follows:
 
 ```
 # First navigate to the folder where you want to place the code
